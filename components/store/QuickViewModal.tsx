@@ -1,0 +1,290 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import {
+  X,
+  ShoppingCart,
+  Plus,
+  Minus,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+} from 'lucide-react';
+import { Product, ProductVariant, StoreSettings } from '@/lib/types';
+import { useCartStore } from '@/store/cartStore';
+import { formatPrice } from '@/lib/utils/whatsapp';
+import { toast } from 'sonner';
+import VariantSelector from './VariantSelector';
+
+interface QuickViewModalProps {
+  product: Product;
+  settings: StoreSettings;
+  onClose: () => void;
+}
+
+export default function QuickViewModal({ product, settings, onClose }: QuickViewModalProps) {
+  const addItem = useCartStore(state => state.addItem);
+
+  const images = React.useMemo(() => {
+    return product.images.length > 0
+      ? [...product.images].sort((a, b) => a.sortOrder - b.sortOrder)
+      : [{
+          id: 'dummy', productId: product.id,
+          url: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=600&auto=format&fit=crop&q=60',
+          alt: product.name, sortOrder: 0, isPrimary: true, createdAt: ''
+        }];
+  }, [product.images, product.id, product.name]);
+
+  const [activeIdx, setActiveIdx] = useState(
+    Math.max(0, images.findIndex(img => img.isPrimary))
+  );
+
+  const activeVariants = product.variants.filter(v => v.active);
+
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | undefined>(
+    product.hasVariants && activeVariants.length > 0 ? activeVariants[0] : undefined
+  );
+  const [quantity, setQuantity] = useState(1);
+
+  // ── Image sync on variant change ─────────────────────────────────────────
+  const applyVariant = useCallback((v: ProductVariant) => {
+    setSelectedVariant(v);
+    if (v.imageUrl) {
+      const idx = images.findIndex(img => img.url === v.imageUrl);
+      if (idx !== -1) setActiveIdx(idx);
+    }
+  }, [images]);
+
+  // ── Derived values ────────────────────────────────────────────────────────
+  const stockAvailable = product.isService
+    ? 999
+    : (selectedVariant ? selectedVariant.stock : product.stock);
+
+  const basePrice    = selectedVariant?.price        ?? product.price;
+  const comparePrice = selectedVariant?.comparePrice ?? product.comparePrice;
+
+  // ── Cart ──────────────────────────────────────────────────────────────────
+  const handleAddToCart = () => {
+    if (quantity > stockAvailable) {
+      toast.error(`Only ${stockAvailable} items left in stock`);
+      return;
+    }
+    addItem(product, selectedVariant, [], quantity);
+    toast.success(`${product.name} added to cart!`);
+    onClose();
+  };
+
+  // ── Escape + body scroll lock ─────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handler);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full sm:max-w-2xl bg-white dark:bg-[#16162a] rounded-t-3xl sm:rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden max-h-[92dvh] sm:max-h-[85dvh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Close */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-3 right-3 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 text-gray-600 dark:text-gray-300 transition-colors cursor-pointer"
+          aria-label="Close Quick View"
+        >
+          <X className="w-4.5 h-4.5" />
+        </button>
+
+        {/* Drag handle (mobile) */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2">
+
+            {/* ── Image Gallery ─────────────────────────────────────────── */}
+            <div className="relative bg-gray-50 dark:bg-black/20">
+              <div className="relative aspect-square w-full overflow-hidden">
+                <Image
+                  src={images[activeIdx]?.url}
+                  alt={product.name}
+                  fill
+                  sizes="(max-width: 640px) 100vw, 50vw"
+                  className="object-cover"
+                  priority
+                  unoptimized={true}
+                />
+                {images.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setActiveIdx(i => (i - 1 + images.length) % images.length)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-white/90 dark:bg-black/60 shadow text-gray-700 dark:text-white hover:bg-white dark:hover:bg-black transition-all cursor-pointer"
+                      aria-label="Previous image"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveIdx(i => (i + 1) % images.length)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-white/90 dark:bg-black/60 shadow text-gray-700 dark:text-white hover:bg-white dark:hover:bg-black transition-all cursor-pointer"
+                      aria-label="Next image"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                {images.length > 1 && (
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {images.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setActiveIdx(i)}
+                        className={`w-1.5 h-1.5 rounded-full transition-all cursor-pointer ${i === activeIdx ? 'bg-white scale-125 shadow' : 'bg-white/50'}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Thumbnails */}
+              {images.length > 1 && (
+                <div className="flex gap-2 p-3 overflow-x-auto scrollbar-none">
+                  {images.map((img, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setActiveIdx(i)}
+                      className={`relative h-12 w-12 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                        i === activeIdx ? 'border-[#e94560]' : 'border-transparent hover:border-gray-400'
+                      }`}
+                    >
+                      <Image src={img.url} alt={`Thumbnail ${i + 1}`} fill sizes="48px" className="object-cover" unoptimized={true} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── Product Info ───────────────────────────────────────────── */}
+            <div className="p-5 flex flex-col gap-4">
+              {/* Name */}
+              <div>
+                {product.category && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    {product.category.name}
+                  </span>
+                )}
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-snug mt-0.5">
+                  {product.name}
+                </h2>
+              </div>
+
+              {/* Price */}
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-xl font-extrabold text-[#1a1a2e] dark:text-white">
+                  {formatPrice(basePrice, settings.currencySymbol)}
+                </span>
+                {comparePrice && comparePrice > basePrice && (
+                  <span className="text-sm text-gray-400 line-through font-semibold">
+                    {formatPrice(comparePrice, settings.currencySymbol)}
+                  </span>
+                )}
+              </div>
+
+              {/* Short description */}
+              {product.shortDescription && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  {product.shortDescription}
+                </p>
+              )}
+
+              {/* ── Variant selectors ──────────────────────────────────── */}
+              {product.hasVariants && activeVariants.length > 0 && (
+                <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+                  <VariantSelector
+                    variants={product.variants}
+                    selectedVariant={selectedVariant}
+                    onChangeSelectedVariant={applyVariant}
+                    enableSwatches={product.enableSwatches}
+                    settings={settings}
+                  />
+                </div>
+              )}
+
+              {/* Stock */}
+              {!product.isService && settings.showStock && (
+                <div className="text-xs font-semibold">
+                  {stockAvailable > 0
+                    ? <span className="text-[#10b981]">In Stock ({stockAvailable} left)</span>
+                    : <span className="text-red-500">Out of Stock</span>
+                  }
+                </div>
+              )}
+
+              {/* Qty + Add to Cart */}
+              <div className="flex gap-3 items-center mt-auto pt-2">
+                <div className="flex items-center border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-[#1a1a2e]">
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                    disabled={quantity <= 1}
+                    className="p-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-40 cursor-pointer"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="px-3 text-sm font-bold text-gray-900 dark:text-white w-8 text-center select-none">
+                    {quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(q => q + 1)}
+                    disabled={quantity >= stockAvailable}
+                    className="p-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-40 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  disabled={stockAvailable <= 0}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#1a1a2e] hover:bg-[#e94560] disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2.5 text-sm font-bold transition-all duration-200 cursor-pointer"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  <span>{stockAvailable <= 0 ? 'Out of Stock' : 'Add to Cart'}</span>
+                </button>
+              </div>
+
+              {/* Full details link */}
+              <Link
+                href={`/product/${product.slug}`}
+                onClick={onClose}
+                className="flex items-center justify-center gap-1.5 text-xs font-bold text-gray-400 hover:text-[#e94560] dark:hover:text-[#e94560] transition-colors py-1"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                View Full Details
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

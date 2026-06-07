@@ -1,0 +1,135 @@
+/**
+ * POST /api/upload-image
+ *
+ * Server-side image upload with Sharp conversion.
+ * Accepts any format (including HEIC/HEIF) and outputs WebP under 50KB.
+ * Uses Sharp (libvips) for native HEIC decoding — works where browser WASM fails.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import sharp from 'sharp';
+import { createClient } from '@supabase/supabase-js';
+
+// Service role client for server-side storage uploads
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
+const MAX_KB = 50;
+const MAX_DIM = 1200;
+
+export async function POST(request: NextRequest) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const folder = (formData.get('folder') as string) || 'uploads';
+
+    if (!file) {
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    // Read file into buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const inputBuffer = Buffer.from(arrayBuffer);
+
+    // Process with Sharp — supports HEIC/HEIF natively via libvips
+    let sharpInstance = sharp(inputBuffer, {
+      // Allow HEIC and AVIF inputs
+      failOnError: false,
+    });
+
+    // Get metadata for dimension checks
+    const meta = await sharpInstance.metadata();
+    const origW = meta.width ?? 800;
+    const origH = meta.height ?? 800;
+
+    // Compute target dimensions
+    let targetW = origW;
+    let targetH = origH;
+    if (targetW > MAX_DIM || targetH > MAX_DIM) {
+      if (targetW >= targetH) {
+        targetH = Math.round((targetH * MAX_DIM) / targetW);
+        targetW = MAX_DIM;
+      } else {
+        targetW = Math.round((targetW * MAX_DIM) / targetH);
+        targetH = MAX_DIM;
+      }
+    }
+
+    // Re-initialize sharp for the actual conversion
+    sharpInstance = sharp(inputBuffer, { failOnError: false });
+
+    // Iterative quality reduction to hit < MAX_KB
+    let quality = 85;
+    let outputBuffer: Buffer | null = null;
+
+    for (let pass = 0; pass < 8; pass++) {
+      // Every 3 passes, also reduce resolution
+      const passW = pass >= 3 ? Math.max(80, Math.round(targetW * Math.pow(0.8, pass - 2))) : targetW;
+      const passH = pass >= 3 ? Math.max(80, Math.round(targetH * Math.pow(0.8, pass - 2))) : targetH;
+
+      const buf = await sharp(inputBuffer, { failOnError: false })
+        .rotate() // auto-rotate from EXIF
+        .resize(passW, passH, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality, effort: 4 })
+        .toBuffer();
+
+      outputBuffer = buf;
+
+      if (buf.length / 1024 <= MAX_KB) {
+        break;
+      }
+
+      quality = Math.max(10, quality - 12);
+    }
+
+    if (!outputBuffer) {
+      return NextResponse.json({ error: 'Conversion failed' }, { status: 500 });
+    }
+
+    // Generate file path
+    const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-z0-9_\-]/gi, '_');
+    const fileName = `${folder}/${baseName}_${Date.now()}.webp`;
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('product-images')
+      .upload(fileName, outputBuffer, {
+        contentType: 'image/webp',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('[api/upload-image] Supabase upload failed:', uploadError);
+      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    }
+
+    const { data } = supabaseAdmin.storage
+      .from('product-images')
+      .getPublicUrl(fileName);
+
+    const finalSizeKb = Math.round(outputBuffer.length / 1024);
+    console.log(`[api/upload-image] ✓ ${file.name} → ${fileName} (${finalSizeKb} KB)`);
+
+    return NextResponse.json({
+      url: data.publicUrl,
+      sizeKb: finalSizeKb,
+      format: 'webp',
+    });
+  } catch (err) {
+    console.error('[api/upload-image] Error:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Upload failed' },
+      { status: 500 }
+    );
+  }
+}
+
+// Allow large file uploads (up to 20MB for HEIC originals)
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};

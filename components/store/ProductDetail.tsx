@@ -1,0 +1,774 @@
+'use client';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ShoppingCart,
+  Plus,
+  Minus,
+  Check,
+  Heart,
+  Share2,
+  Eye,
+  HelpCircle,
+  Copy,
+  X,
+  Package,
+  Truck,
+  Tag,
+  ZoomIn
+} from 'lucide-react';
+import { StoreSettings, Product, ProductVariant, ProductModifier, PaymentMethod } from '@/lib/types';
+import PaymentBadges from '@/components/common/PaymentBadges';
+import { useCartStore } from '@/store/cartStore';
+import { formatPrice } from '@/lib/utils/whatsapp';
+import { toast } from 'sonner';
+import VariantSelector from './VariantSelector';
+
+interface ProductDetailProps {
+  product: Product;
+  settings: StoreSettings;
+  averageRating?: { average: number; count: number };
+}
+
+const isHtml = (str: string) => /<[a-z][\s\S]*>/i.test(str);
+
+export default function ProductDetail({ product, settings, averageRating }: ProductDetailProps) {
+  const addItem = useCartStore(state => state.addItem);
+
+  // Images setup
+  const images = React.useMemo(() => {
+    return product.images.length > 0
+      ? [...product.images].sort((a, b) => a.sortOrder - b.sortOrder)
+      : [{ id: 'dummy', productId: product.id, url: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=600&auto=format&fit=crop&q=60', alt: product.name, sortOrder: 0, isPrimary: true, createdAt: '' }];
+  }, [product.images, product.id, product.name]);
+
+  const [activeImage, setActiveImage] = useState(images.find(img => img.isPrimary)?.url || images[0].url);
+  const [activeImageIndex, setActiveImageIndex] = useState(
+    Math.max(0, images.findIndex(img => img.url === (images.find(i => i.isPrimary)?.url || images[0].url)))
+  );
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const imgContainerRef = useRef<HTMLDivElement>(null);
+
+  // Selection states
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | undefined>(
+    product.hasVariants && product.variants.length > 0
+      ? product.variants.filter(v => v.active)[0]
+      : undefined
+  );
+
+  const [selectedModifiers, setSelectedModifiers] = useState<ProductModifier[]>([]);
+  const [quantity, setQuantity] = useState(1);
+  const [activeDetailTab, setActiveDetailTab] = useState<'description' | 'faq' | 'returns'>('description');
+
+  const handleVariantChange = useCallback((v: ProductVariant) => {
+    setSelectedVariant(v);
+    if (v.imageUrl) {
+      // Try to match the variant image to one of the gallery images
+      const idx = images.findIndex(img => img.url === v.imageUrl);
+      if (idx !== -1) {
+        // Found — switch gallery to that index so arrows work from here
+        setActiveImageIndex(idx);
+      } else {
+        // Variant image not in gallery — keep current index, just update activeImage fallback
+        setActiveImage(v.imageUrl);
+      }
+    }
+  }, [images]);
+
+  // Client-side states (avoid hydration mismatch)
+  const [mounted, setMounted] = useState(false);
+  const [viewerCount, setViewerCount] = useState(23);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [productUrl, setProductUrl] = useState('');
+
+  // Dynamic payment methods come directly from settings.safeCheckoutMethods (single source of truth)
+
+  useEffect(() => {
+    setMounted(true);
+    const min = settings.minViews ?? 10;
+    const max = settings.maxViews ?? 50;
+    setViewerCount(Math.floor(Math.random() * (max - min + 1)) + min);
+    setProductUrl(window.location.href);
+    const wishlist = JSON.parse(localStorage.getItem('wishlist') || '[]');
+    setIsWishlisted(wishlist.includes(product.id));
+  }, [product.id, settings.minViews, settings.maxViews]);
+
+  // Price calculations
+  const basePrice = selectedVariant?.price ?? product.price;
+  const modifiersTotal = selectedModifiers.reduce((sum, m) => sum + m.price, 0);
+  const unitPrice = basePrice + modifiersTotal;
+
+  // Stock check
+  const stockAvailable = product.isService
+    ? 999
+    : (selectedVariant ? selectedVariant.stock : product.stock);
+
+  // Ratings calculation — always prefer live averageRating (only approved reviews)
+  // product.reviewsCount can be stale/0; averageRating is computed live from approved rows
+  const displayRating = (averageRating && averageRating.count > 0) ? averageRating.average : (product.rating ?? 5);
+  const displayCount = averageRating ? averageRating.count : (product.reviewsCount ?? 0);
+
+  const handleModifierToggle = (modifier: ProductModifier) => {
+    setSelectedModifiers(prev =>
+      prev.some(m => m.id === modifier.id)
+        ? prev.filter(m => m.id !== modifier.id)
+        : [...prev, modifier]
+    );
+  };
+
+  const handleAddToCart = () => {
+    if (quantity > stockAvailable) {
+      toast.error(`Only ${stockAvailable} items left in stock`);
+      return;
+    }
+    addItem(product, selectedVariant, selectedModifiers, quantity);
+    toast.success(`${product.name} added to cart!`);
+  };
+
+  const toggleWishlist = () => {
+    const wishlist = JSON.parse(localStorage.getItem('wishlist') || '[]');
+    let newWishlist;
+    if (wishlist.includes(product.id)) {
+      newWishlist = wishlist.filter((id: string) => id !== product.id);
+      setIsWishlisted(false);
+      toast.success('Removed from wishlist');
+    } else {
+      newWishlist = [...wishlist, product.id];
+      setIsWishlisted(true);
+      toast.success('Added to wishlist');
+    }
+    localStorage.setItem('wishlist', JSON.stringify(newWishlist));
+    window.dispatchEvent(new Event('wishlist-updated'));
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(productUrl);
+    setCopied(true);
+    toast.success('Link copied to clipboard!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const whatsappUrl = `https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello, I have a question about ${product.name}: ${productUrl}`)}`;
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+      {/* Back button */}
+      <Link href="/" className="inline-flex items-center gap-1 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-[#e94560] dark:hover:text-[#e94560] transition-colors">
+        <ChevronLeft className="h-4 w-4" />
+        <span>Back to Shop</span>
+      </Link>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 bg-white dark:bg-[#16162a] p-5 md:p-8 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm text-gray-900 dark:text-white transition-colors">
+        {/* Gallery */}
+        <div className="space-y-3">
+          {/* Main image with arrows + hover zoom */}
+          <div
+            ref={imgContainerRef}
+            className="relative aspect-square w-full overflow-hidden rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-transparent group cursor-zoom-in"
+            onMouseMove={(e) => {
+              // Don't zoom if the mouse is directly over a child with pointer-events (arrows)
+              if ((e.target as HTMLElement).closest('button')) return;
+              if (!imgContainerRef.current) return;
+              const rect = imgContainerRef.current.getBoundingClientRect();
+              const x = ((e.clientX - rect.left) / rect.width) * 100;
+              const y = ((e.clientY - rect.top) / rect.height) * 100;
+              setZoomPos({ x, y });
+              setIsZoomed(true);
+            }}
+            onMouseLeave={() => setIsZoomed(false)}
+            onClick={() => setLightboxOpen(true)}
+          >
+            <Image
+              src={images[activeImageIndex]?.url ?? activeImage}
+              alt={product.name}
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 600px"
+              className={`object-cover transition-transform duration-200 ease-out ${
+                isZoomed ? 'scale-[1.75]' : 'scale-100'
+              }`}
+              style={isZoomed ? { transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` } : {}}
+              priority
+              unoptimized={true}
+            />
+            {/* Zoom icon hint */}
+            <div className="absolute top-3 right-3 bg-white/80 dark:bg-black/50 rounded-lg p-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <ZoomIn className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            </div>
+            {/* Prev Arrow */}
+            {images.length > 1 && (
+              <button
+                type="button"
+                onMouseEnter={() => setIsZoomed(false)}
+                onMouseMove={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setActiveImageIndex(idx => (idx - 1 + images.length) % images.length); }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-white/90 dark:bg-black/60 shadow-md text-gray-800 dark:text-white opacity-0 group-hover:opacity-100 hover:bg-white dark:hover:bg-black transition-all cursor-pointer"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
+            {/* Next Arrow */}
+            {images.length > 1 && (
+              <button
+                type="button"
+                onMouseEnter={() => setIsZoomed(false)}
+                onMouseMove={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setActiveImageIndex(idx => (idx + 1) % images.length); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-white/90 dark:bg-black/60 shadow-md text-gray-800 dark:text-white opacity-0 group-hover:opacity-100 hover:bg-white dark:hover:bg-black transition-all cursor-pointer"
+                aria-label="Next image"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            )}
+            {/* Dot indicators */}
+            {images.length > 1 && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                {images.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onMouseEnter={() => setIsZoomed(false)}
+                    onMouseMove={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); setActiveImageIndex(i); }}
+                    className={`w-1.5 h-1.5 rounded-full transition-all cursor-pointer ${
+                      i === activeImageIndex ? 'bg-white scale-125 shadow' : 'bg-white/50'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Thumbnails */}
+          {images.length > 1 && (
+            <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
+              {images.map((img, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveImageIndex(i)}
+                  className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border transition-all cursor-pointer ${
+                    i === activeImageIndex
+                      ? 'border-[#e94560] ring-2 ring-[#e94560]/10'
+                      : 'border-gray-200 dark:border-gray-800 hover:border-gray-400'
+                  }`}
+                >
+                  <Image
+                    src={img.url}
+                    alt={`${product.name} gallery ${i}`}
+                    fill
+                    sizes="64px"
+                    className="object-cover"
+                    unoptimized={true}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Product Details info */}
+        <div className="flex flex-col justify-between space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-1">
+              {product.category && (
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  {product.category.name}
+                </span>
+              )}
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{product.name}</h2>
+
+              {/* Ratings and Reviews count */}
+              {mounted && (displayCount > 0 || displayRating > 0) && (
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  <div className="flex items-center text-amber-400">
+                    {[...Array(5)].map((_, i) => {
+                      const starVal = i + 1;
+                      if (displayRating >= starVal) {
+                        return <span key={i} className="text-base">★</span>;
+                      } else if (displayRating >= starVal - 0.5) {
+                        return <span key={i} className="text-base">★</span>; // standard solid or half
+                      } else {
+                        return <span key={i} className="text-gray-200 dark:text-gray-700 text-base">★</span>;
+                      }
+                    })}
+                  </div>
+                  <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                    {displayCount} reviews
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Pricing */}
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-2xl font-extrabold text-[#1a1a2e] dark:text-white">
+                {formatPrice(unitPrice, settings.currencySymbol)}
+              </span>
+              {product.comparePrice && product.comparePrice > unitPrice && (
+                <span className="text-sm text-gray-400 line-through font-semibold">
+                  {formatPrice(product.comparePrice, settings.currencySymbol)}
+                </span>
+              )}
+            </div>
+
+            {/* Short Description */}
+            {product.shortDescription && (
+              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                {product.shortDescription}
+              </p>
+            )}
+
+            {/* Live views trust element */}
+            {mounted && settings.enableFakeViews && (
+              <div className="flex items-center gap-2 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800/80 rounded-xl px-4 py-2.5 text-xs text-gray-700 dark:text-gray-300 w-fit">
+                <Eye className="h-4 w-4 text-[#e94560]" />
+                <span>
+                  <strong className="font-extrabold text-[#e94560]">{viewerCount}</strong> people are viewing this right now
+                </span>
+              </div>
+            )}
+
+            {/* Stock status */}
+            {!product.isService && settings.showStock && (
+              <div className="text-xs font-semibold">
+                {stockAvailable > 0 ? (
+                  <span className="text-[#10b981]">In Stock ({stockAvailable} left)</span>
+                ) : (
+                  <span className="text-red-500">Out of Stock</span>
+                )}
+              </div>
+            )}
+
+            {/* Variant Selector */}
+            {product.hasVariants && product.variants.length > 0 && (
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+                <VariantSelector
+                  variants={product.variants}
+                  selectedVariant={selectedVariant}
+                  onChangeSelectedVariant={handleVariantChange}
+                  enableSwatches={product.enableSwatches}
+                  settings={settings}
+                />
+              </div>
+            )}
+
+            {/* Modifiers List */}
+            {product.modifiers && product.modifiers.filter(m => m.active).length > 0 && (
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Add-ons / Customizations</span>
+                <div className="space-y-2">
+                  {product.modifiers.filter(m => m.active).map(mod => {
+                    const isSelected = selectedModifiers.some(m => m.id === mod.id);
+                    return (
+                      <button
+                        key={mod.id}
+                        onClick={() => handleModifierToggle(mod)}
+                        className={`flex w-full items-center justify-between p-3.5 border rounded-xl transition-all cursor-pointer ${isSelected
+                            ? 'border-[#1a1a2e] bg-[#1a1a2e]/5 dark:border-[#e94560] dark:bg-[#e94560]/10'
+                            : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 bg-white dark:bg-[#16162a]'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`flex h-5 w-5 items-center justify-center rounded border transition-all ${isSelected ? 'bg-[#1a1a2e] border-[#1a1a2e] text-white dark:bg-[#e94560] dark:border-[#e94560]' : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-transparent'
+                            }`}>
+                            {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
+                          </div>
+                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{mod.name}</span>
+                        </div>
+                        <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                          +{formatPrice(mod.price, settings.currencySymbol)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Ask a Question & Share Link Row */}
+            {mounted && (
+              <div className="flex items-center gap-6 border-t border-gray-100 dark:border-gray-800 pt-4 text-xs font-bold uppercase tracking-wider text-gray-500">
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 hover:text-[#e94560] transition-colors cursor-pointer"
+                >
+                  <HelpCircle className="h-4.5 w-4.5" />
+                  <span>Ask a question</span>
+                </a>
+
+                <button
+                  onClick={() => setIsShareOpen(true)}
+                  className="flex items-center gap-1.5 hover:text-[#e94560] transition-colors cursor-pointer"
+                >
+                  <Share2 className="h-4.5 w-4.5" />
+                  <span>Share</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Action Row */}
+          <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-4">
+            {/* Quantity Selector */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Quantity</span>
+              <div className="flex items-center border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden bg-white dark:bg-[#16162a]">
+                <button
+                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  className="p-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 active:bg-gray-100 dark:active:bg-white/10 cursor-pointer disabled:opacity-50"
+                  disabled={quantity <= 1}
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="px-4 text-sm font-bold text-gray-900 dark:text-white w-12 text-center select-none">
+                  {quantity}
+                </span>
+                <button
+                  onClick={() => setQuantity(q => q + 1)}
+                  className="p-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 active:bg-gray-100 dark:active:bg-white/10 cursor-pointer disabled:opacity-50"
+                  disabled={quantity >= stockAvailable}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Add to Cart & Wishlist buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddToCart}
+                disabled={stockAvailable <= 0}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#1a1a2e] hover:bg-[#e94560] active:scale-98 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-5 py-3.5 text-sm font-bold transition-all duration-200 shadow-md cursor-pointer"
+              >
+                <ShoppingCart className="h-5 w-5" />
+                <span>{stockAvailable <= 0 ? 'Out of Stock' : 'Add to Cart'}</span>
+              </button>
+
+              {mounted && (
+                <button
+                  onClick={toggleWishlist}
+                  className={`p-3.5 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${isWishlisted
+                      ? 'border-red-200 bg-red-50 text-red-500 dark:border-red-900/35 dark:bg-red-500/10'
+                      : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400'
+                    }`}
+                  aria-label="Toggle Wishlist"
+                >
+                  <Heart className={`h-5 w-5 ${isWishlisted ? 'fill-current text-red-500' : ''}`} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Trust Badges Panel */}
+          {mounted && settings.enableTrustBadges && (
+            <div className="border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/5 rounded-2xl p-5 space-y-4 animate-fade-in transition-colors">
+
+              {/* 2-Column Delivery/Shipping Estimates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
+                {/* Delivery Estimate */}
+                {settings.deliveryEstimateText && (
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 flex items-center justify-center h-10 w-10 bg-white dark:bg-white/5 border border-gray-100 dark:border-gray-850 rounded-xl text-gray-700 dark:text-gray-300">
+                      <Package className="h-5 w-5" />
+                    </div>
+                    <p className="text-xs text-gray-650 dark:text-gray-300 leading-relaxed font-semibold">
+                      {settings.deliveryEstimateText}
+                    </p>
+                  </div>
+                )}
+
+                {/* Free Shipping */}
+                {settings.freeShippingText && (
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 flex items-center justify-center h-10 w-10 bg-white dark:bg-white/5 border border-gray-100 dark:border-gray-850 rounded-xl text-gray-700 dark:text-gray-300">
+                      <Truck className="h-5 w-5" />
+                    </div>
+                    <p className="text-xs text-gray-650 dark:text-gray-300 leading-relaxed font-semibold">
+                      {settings.freeShippingText}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Promo Code */}
+              {settings.promoCodeText && (
+                <div className="flex items-center gap-3 justify-center text-center">
+                  <Tag className="h-4 w-4 text-[#e94560]" />
+                  <p className="text-xs text-gray-650 dark:text-gray-300 font-bold">
+                    {settings.promoCodeText}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Safe Checkout Block — uses settings.safeCheckoutMethods as single source of truth */}
+          {mounted && settings.enableTrustBadges && settings.safeCheckoutMethods && settings.safeCheckoutMethods.length > 0 && (
+            <div className="border border-gray-200 dark:border-gray-800 bg-gray-50/20 dark:bg-white/5 rounded-2xl p-4 text-center space-y-3 transition-colors">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block">
+                {settings.safeCheckoutText || 'Guarantee Safe Checkout:'}
+              </span>
+              <PaymentBadges 
+                methods={settings.safeCheckoutMethods} 
+                className="flex flex-wrap items-center justify-center gap-2"
+              />
+            </div>
+          )}
+
+          {/* Tab Layout for Description, FAQ, and Return Policy */}
+          <div className="border-t border-gray-200 dark:border-gray-800 mt-8 pt-6">
+            {/* Tab Headers */}
+            <div className="flex border-b border-gray-200 dark:border-gray-800 gap-6 overflow-x-auto scrollbar-none pb-2">
+              <button
+                type="button"
+                onClick={() => setActiveDetailTab('description')}
+                className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${
+                  activeDetailTab === 'description'
+                    ? 'text-[#e94560] border-b-2 border-[#e94560]'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white'
+                }`}
+              >
+                Description
+              </button>
+
+              {settings.faqContent && (
+                <button
+                  type="button"
+                  onClick={() => setActiveDetailTab('faq')}
+                  className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${
+                    activeDetailTab === 'faq'
+                      ? 'text-[#e94560] border-b-2 border-[#e94560]'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white'
+                  }`}
+                >
+                  FAQ
+                </button>
+              )}
+
+              {settings.returnPolicyContent && (
+                <button
+                  type="button"
+                  onClick={() => setActiveDetailTab('returns')}
+                  className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${
+                    activeDetailTab === 'returns'
+                      ? 'text-[#e94560] border-b-2 border-[#e94560]'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white'
+                  }`}
+                >
+                  Return & Exchange
+                </button>
+              )}
+            </div>
+
+            {/* Tab Contents */}
+            <div className="py-6 text-sm text-gray-650 dark:text-gray-300 leading-relaxed font-medium animate-fade-in prose dark:prose-invert max-w-none">
+              {activeDetailTab === 'description' && product.description && (
+                isHtml(product.description) ? (
+                  <div dangerouslySetInnerHTML={{ __html: product.description }} />
+                ) : (
+                  <div className="whitespace-pre-wrap">{product.description}</div>
+                )
+              )}
+
+              {activeDetailTab === 'faq' && settings.faqContent && (
+                isHtml(settings.faqContent) ? (
+                  <div dangerouslySetInnerHTML={{ __html: settings.faqContent }} />
+                ) : (
+                  <div className="whitespace-pre-wrap">{settings.faqContent}</div>
+                )
+              )}
+
+              {activeDetailTab === 'returns' && settings.returnPolicyContent && (
+                isHtml(settings.returnPolicyContent) ? (
+                  <div dangerouslySetInnerHTML={{ __html: settings.returnPolicyContent }} />
+                ) : (
+                  <div className="whitespace-pre-wrap">{settings.returnPolicyContent}</div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Share Modal */}
+      {isShareOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-fade-in">
+          <div className="relative w-full max-w-md bg-white dark:bg-[#16162a] border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl p-6 text-gray-900 dark:text-white transition-all space-y-4">
+
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Copy link</h3>
+              <button
+                onClick={() => setIsShareOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer p-1"
+                aria-label="Close modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Input with Copy button */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                readOnly
+                value={productUrl}
+                className="flex-1 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm font-semibold select-all focus:outline-none"
+              />
+              <button
+                onClick={handleCopyLink}
+                className="bg-[#1a1a2e] hover:bg-[#e94560] dark:bg-white/10 dark:hover:bg-white/20 text-white rounded-xl px-4 py-2.5 flex items-center justify-center cursor-pointer transition-colors"
+                title="Copy Link"
+              >
+                {copied ? <Check className="h-4.5 w-4.5" /> : <Copy className="h-4.5 w-4.5" />}
+              </button>
+            </div>
+
+            {/* Social Sharing Icons */}
+            <div className="space-y-2 pt-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Share on socials</span>
+              <div className="flex items-center gap-3">
+                {/* Facebook */}
+                <a
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(productUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1877F2]/10 hover:bg-[#1877F2]/20 text-[#1877F2] transition-colors cursor-pointer"
+                  title="Share on Facebook"
+                >
+                  <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                    <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c4.56-.93 8-4.96 8-9.75z" />
+                  </svg>
+                </a>
+
+                {/* Twitter / X */}
+                <a
+                  href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(productUrl)}&text=${encodeURIComponent(product.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-black dark:text-white transition-colors cursor-pointer"
+                  title="Share on X"
+                >
+                  <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </a>
+
+                {/* Pinterest */}
+                <a
+                  href={`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(productUrl)}&description=${encodeURIComponent(product.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#BD081C]/10 hover:bg-[#BD081C]/20 text-[#BD081C] transition-colors cursor-pointer"
+                  title="Share on Pinterest"
+                >
+                  <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                    <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.718-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.166-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026z" />
+                  </svg>
+                </a>
+
+                {/* Instagram */}
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(productUrl);
+                    toast.success('Link copied! Open Instagram to share.');
+                  }}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E1306C]/10 hover:bg-[#E1306C]/20 text-[#E1306C] transition-colors cursor-pointer"
+                  title="Copy link for Instagram"
+                >
+                  <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.051C.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+      {/* Lightbox Modal */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in"
+          onClick={() => setLightboxOpen(false)}
+        >
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 z-10 w-11 h-11 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            aria-label="Close lightbox"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Prev arrow */}
+          {images.length > 1 && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setActiveImageIndex(i => (i - 1 + images.length) % images.length); }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 w-11 h-11 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              aria-label="Previous image"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Main lightbox image */}
+          <div
+            className="relative w-full max-w-3xl max-h-[85dvh] mx-16"
+            style={{ aspectRatio: '1/1' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Image
+              src={images[activeImageIndex]?.url ?? activeImage}
+              alt={product.name}
+              fill
+              sizes="90vw"
+              className="object-contain"
+              unoptimized={true}
+            />
+          </div>
+
+          {/* Next arrow */}
+          {images.length > 1 && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setActiveImageIndex(i => (i + 1) % images.length); }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 w-11 h-11 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              aria-label="Next image"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Dot indicators */}
+          {images.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setActiveImageIndex(i); }}
+                  className={`w-2 h-2 rounded-full transition-all cursor-pointer ${
+                    i === activeImageIndex ? 'bg-white scale-125' : 'bg-white/40'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
