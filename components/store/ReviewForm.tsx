@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { submitReview } from '@/lib/services/reviews';
 import StarRating from './StarRating';
 import { toast } from 'sonner';
-import { Send } from 'lucide-react';
+import { Send } from '@/components/common/Icons';
 
 interface ReviewFormProps {
   productId: string;

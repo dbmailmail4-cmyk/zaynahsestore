@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useCartStore } from '@/store/cartStore';
 import { StoreSettings } from '@/lib/types';
 import { formatPrice } from '@/lib/utils/whatsapp';
-import { X, Trash2, Plus, Minus, ShoppingBag, Clock, Truck, Tag } from '@/components/common/Icons';
+import { X, Trash2, Plus, Minus, ShoppingBag, Clock, Truck, Tag, Lock, ArrowRight } from '@/components/common/Icons';
 import { toast } from 'sonner';
 import { validateCouponCode } from '@/lib/services/coupons';
 
@@ -158,7 +158,7 @@ export default function CartDrawer({ settings }: CartDrawerProps) {
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-150 dark:border-gray-800 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-5 py-4">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-[#e94560]" />
             <h3 className="font-extrabold text-gray-900 dark:text-white uppercase tracking-wider text-sm">
@@ -191,52 +191,52 @@ export default function CartDrawer({ settings }: CartDrawerProps) {
             </div>
           ) : (
             <>
-              {/* Cart Expiry Timer Indicator */}
-              {settings.cart_timer_enabled !== false && cartCreatedAt && timeLeftStr && (
-                <div className={`flex items-center gap-2 p-3 rounded-xl border text-xs font-semibold ${
-                  isTimerExpired
-                    ? 'bg-rose-50 border-rose-100 text-rose-600 dark:bg-rose-950/15 dark:border-rose-900/30 dark:text-rose-400'
-                    : 'bg-amber-50 border-amber-100 text-amber-700 dark:bg-amber-950/15 dark:border-amber-900/30 dark:text-amber-400'
-                }`}>
-                  <Clock className="w-4 h-4 flex-shrink-0 animate-pulse" />
-                  <div>
-                    {isTimerExpired ? (
-                      <span>Reservation expired! Items in your cart may sell out.</span>
-                    ) : (
+              {/* Cart Expiry & Shipping Progress Group */}
+              {(settings.cart_timer_enabled !== false || settings.free_shipping_bar_enabled !== false) && (
+                <div className="border-b border-gray-100 dark:border-gray-800 pb-3 space-y-2.5">
+                  {/* Cart Expiry Timer Indicator */}
+                  {settings.cart_timer_enabled !== false && cartCreatedAt && timeLeftStr && (
+                    <div className={`flex items-center gap-1.5 px-1 py-0.5 text-[10px] font-bold ${
+                      isTimerExpired
+                        ? 'text-rose-500 dark:text-rose-400'
+                        : 'text-amber-600 dark:text-amber-400'
+                    }`}>
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0 animate-pulse" />
                       <span>
-                        {settings.cart_timer_message
-                          ? settings.cart_timer_message.replace('{timer}', timeLeftStr)
-                          : `Items in your cart are reserved for ${timeLeftStr} minutes.`
-                        }
+                        {isTimerExpired ? (
+                          "Reservation expired! Items may sell out."
+                        ) : (
+                          settings.cart_timer_message
+                            ? settings.cart_timer_message.replace('{timer}', timeLeftStr)
+                            : `Items are reserved for ${timeLeftStr} mins.`
+                        )}
                       </span>
-                    )}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {settings.free_shipping_bar_enabled !== false && (
-                <div className="bg-gray-50 dark:bg-white/5 border border-gray-150 dark:border-gray-800/80 rounded-2xl p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-gray-750 dark:text-gray-300">
-                    <Truck className="w-4.5 h-4.5 text-[#e94560]" />
-                    {isFreeShipping ? (
-                      <span className="text-emerald-500">🎉 You qualified for FREE SHIPPING!</span>
-                    ) : (
-                      <span>
-                        Add{' '}
-                        <strong className="text-[#e94560]">
-                          {formatPrice(amountToFreeShipping, settings.currencySymbol)}
-                        </strong>{' '}
-                        more for FREE SHIPPING
-                      </span>
-                    )}
-                  </div>
-                  {/* Progress bar line */}
-                  <div className="w-full bg-gray-200 dark:bg-gray-800 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-amber-500 to-[#e94560] rounded-full transition-all duration-500"
-                      style={{ width: `${shippingPercent}%` }}
-                    />
-                  </div>
+                  {/* Free Shipping Tracker */}
+                  {settings.free_shipping_bar_enabled !== false && (
+                    <div className="space-y-1 py-0.5 px-1">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-gray-700 dark:text-gray-300">
+                        <span className="flex items-center gap-1">
+                          <Truck className="w-3.5 h-3.5 text-[#e94560] shrink-0" />
+                          {isFreeShipping ? (
+                            <span className="text-emerald-500">🎉 FREE SHIPPING!</span>
+                          ) : (
+                            <span>Add <strong className="text-[#e94560]">{formatPrice(amountToFreeShipping, settings.currencySymbol)}</strong> more for free delivery</span>
+                          )}
+                        </span>
+                        {!isFreeShipping && <span className="text-gray-400 font-bold text-[9px]">{Math.round(shippingPercent)}%</span>}
+                      </div>
+                      {/* Progress bar line */}
+                      <div className="w-full bg-gray-200 dark:bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-500 to-[#e94560] rounded-full transition-all duration-500"
+                          style={{ width: `${shippingPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -324,38 +324,38 @@ export default function CartDrawer({ settings }: CartDrawerProps) {
 
         {/* Footer Billing Details & CTA */}
         {items.length > 0 && (
-          <div className="border-t border-gray-150 dark:border-gray-800 p-5 bg-gray-50/50 dark:bg-white/5 space-y-4">
+          <div className="border-t border-gray-100 dark:border-gray-800 p-3 bg-gray-50/50 dark:bg-white/5 space-y-2">
             
             {/* Promo coupon code input */}
             {settings.coupon_codes_enabled !== false && (
-              <div className="border-b border-gray-200 dark:border-gray-800 pb-3 mb-1">
+              <div className="border-b border-gray-200 dark:border-gray-800 pb-1.5">
                 {appliedCoupon ? (
-                  <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/20 px-3 py-2 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-450">
-                    <span className="flex items-center gap-1.5">
-                      <Tag className="w-3.5 h-3.5 shrink-0" />
+                  <div className="flex items-center justify-between bg-emerald-50/70 dark:bg-emerald-950/10 border border-emerald-100/70 dark:border-emerald-900/20 px-2 py-1 rounded-lg text-[10px] font-bold text-emerald-600 dark:text-emerald-450 animate-fade-in">
+                    <span className="flex items-center gap-1">
+                      <Tag className="w-3 h-3 shrink-0 animate-pulse" />
                       Promo Applied: <strong className="font-extrabold">{appliedCoupon.code}</strong> ({appliedCoupon.discountType === 'percentage' ? `${appliedCoupon.value}%` : `${formatPrice(appliedCoupon.value, settings.currencySymbol)} Off`})
                     </span>
                     <button
                       type="button"
                       onClick={handleRemoveCoupon}
-                      className="text-red-550 hover:text-red-600 dark:hover:text-red-400 font-extrabold text-[10px] uppercase px-2 py-1 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-pointer"
+                      className="text-red-500 hover:text-red-600 dark:hover:text-red-400 font-extrabold text-[8px] uppercase px-1.5 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-pointer"
                     >
                       Remove
                     </button>
                   </div>
                 ) : (
-                  <form onSubmit={handleApplyCoupon} className="flex gap-2">
+                  <form onSubmit={handleApplyCoupon} className="flex gap-1.5">
                     <input
                       type="text"
-                      placeholder="PROMO CODE (e.g. SAVE10)"
+                      placeholder="PROMO CODE"
                       value={couponCodeInput}
                       onChange={e => setCouponCodeInput(e.target.value.toUpperCase())}
-                      className="flex-1 px-3 py-2 text-xs font-semibold rounded-xl border border-gray-200 dark:border-gray-805 bg-white dark:bg-[#16162a] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-[#e94560]"
+                      className="flex-1 px-2.5 py-1 text-[10px] font-bold rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#16162a] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-[#e94560]"
                     />
                     <button
                       type="submit"
                       disabled={validatingCoupon || !couponCodeInput.trim()}
-                      className="px-4 py-2 bg-[#1a1a2e] dark:bg-gray-800 hover:bg-[#e94560] dark:hover:bg-[#e94560] text-white disabled:bg-gray-300 dark:disabled:bg-gray-800/50 disabled:text-gray-400 text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
+                      className="px-3 py-1 bg-[#1a1a2e] dark:bg-gray-800 hover:bg-[#e94560] dark:hover:bg-[#e94560] text-white disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-400 text-[10px] font-bold rounded-lg transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
                     >
                       {validatingCoupon ? '...' : 'Apply'}
                     </button>
@@ -365,19 +365,19 @@ export default function CartDrawer({ settings }: CartDrawerProps) {
             )}
 
             {/* Price Calculations */}
-            <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-300 font-semibold">
+            <div className="space-y-0.5 text-[11px] text-gray-600 dark:text-gray-300 font-bold">
               <div className="flex justify-between">
                 <span>Subtotal</span>
-                <span className="text-gray-900 dark:text-white font-bold">
+                <span className="text-gray-950 dark:text-white font-extrabold">
                   {formatPrice(totalPrice, settings.currencySymbol)}
                 </span>
               </div>
 
               {/* Volume Discount Alert */}
               {isVolumeDiscountEligible && (
-                <div className="flex justify-between text-emerald-500 font-bold">
+                <div className="flex justify-between text-emerald-500 font-extrabold text-[10px]">
                   <span className="flex items-center gap-1">
-                    <Tag className="w-3.5 h-3.5" />
+                    <Tag className="w-3 h-3 animate-pulse" />
                     Volume Discount ({volumeDiscountPercent}%)
                   </span>
                   <span>
@@ -388,9 +388,9 @@ export default function CartDrawer({ settings }: CartDrawerProps) {
 
               {/* Coupon Discount Item */}
               {appliedCoupon && (
-                <div className="flex justify-between text-emerald-500 font-bold">
+                <div className="flex justify-between text-emerald-500 font-extrabold text-[10px]">
                   <span className="flex items-center gap-1">
-                    <Tag className="w-3.5 h-3.5" />
+                    <Tag className="w-3 h-3 animate-pulse" />
                     Promo Discount ({appliedCoupon.code})
                   </span>
                   <span>
@@ -400,14 +400,14 @@ export default function CartDrawer({ settings }: CartDrawerProps) {
               )}
 
               {!isVolumeDiscountEligible && settings.volume_discounts_enabled !== false && (
-                <p className="text-[10px] text-amber-500 font-semibold tracking-wide flex items-center gap-1 py-1">
-                  <span>💡 Buy {volumeThreshold} or more items to get {volumeDiscountPercent}% off!</span>
-                </p>
+                <div className="text-[8.5px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/5 dark:bg-amber-500/10 px-2 py-0.5 rounded-lg w-full text-center flex items-center justify-center gap-1 mt-0.5 border border-amber-500/10 select-none">
+                  <span>💡 Buy {volumeThreshold} items to get {volumeDiscountPercent}% off!</span>
+                </div>
               )}
 
-              <div className="flex justify-between border-t border-gray-200 dark:border-gray-800/80 pt-2 text-sm font-black text-gray-900 dark:text-white">
+              <div className="flex justify-between border-t border-gray-200 dark:border-gray-800/80 pt-1 text-xs font-black text-gray-900 dark:text-white">
                 <span>Total</span>
-                <span className="text-[#e94560] text-base">
+                <span className="text-[#e94560] text-sm font-black">
                   {formatPrice(grandTotal, settings.currencySymbol)}
                 </span>
               </div>
@@ -415,16 +415,17 @@ export default function CartDrawer({ settings }: CartDrawerProps) {
 
             {/* Checkout Action Button */}
             <Link
-              href="/cart"
+              href="/cart?step=checkout"
               onClick={() => setDrawerOpen(false)}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#1a1a2e] hover:bg-[#e94560] active:scale-98 text-white py-3.5 text-sm font-bold transition-all shadow-md cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#1a1a2e] hover:bg-[#e94560] active:scale-98 text-white py-3.5 text-sm font-black transition-all shadow-lg cursor-pointer"
             >
+              <Lock className="w-4 h-4 shrink-0" />
               <span>Secure Checkout</span>
-              <X className="w-4 h-4 rotate-45" /> {/* Arrow-like look or cross */}
+              <ArrowRight className="w-4 h-4 shrink-0" />
             </Link>
 
-            <p className="text-[10px] text-gray-400 text-center leading-normal">
-              Volume discounts and free shipping qualifications automatically carry over to checkout page.
+            <p className="text-[8.5px] text-gray-400 dark:text-gray-500 text-center whitespace-nowrap overflow-hidden text-ellipsis block select-none">
+              Discounts & free shipping carry over to checkout page
             </p>
           </div>
         )}

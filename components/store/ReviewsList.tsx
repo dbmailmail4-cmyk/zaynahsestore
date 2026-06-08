@@ -4,7 +4,7 @@ import React from 'react';
 import { Review } from '@/lib/types';
 import StarRating from './StarRating';
 import { format, parseISO } from 'date-fns';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare } from '@/components/common/Icons';
 
 interface ReviewsListProps {
   reviews: Review[];

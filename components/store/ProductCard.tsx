@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ShoppingCart, Heart } from 'lucide-react';
+import { ShoppingCart, Heart } from '@/components/common/Icons';
 import { Product, StoreSettings } from '@/lib/types';
 import { useCartStore } from '@/store/cartStore';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, currencySymbol = 'Rs.', settings }: ProductCardProps) {
   const addItem = useCartStore(state => state.addItem);
+  const setDrawerOpen = useCartStore(state => state.setDrawerOpen);
   const primaryImage = product.images.find(img => img.isPrimary)?.url || product.images[0]?.url || 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=600&auto=format&fit=crop&q=60';
 
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
@@ -67,11 +68,13 @@ export default function ProductCard({ product, currencySymbol = 'Rs.', settings 
     e.preventDefault();
     e.stopPropagation();
     if (product.hasVariants) {
-      window.location.href = `/product/${product.slug}`;
+      // Open quick-view to pick variant instead of navigating away
+      setQuickViewOpen(true);
       return;
     }
     addItem(product, undefined, [], 1);
     toast.success(`${product.name} added to cart!`);
+    setDrawerOpen(true);
   };
 
   // Swatch settings

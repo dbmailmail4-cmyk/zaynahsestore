@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Heart, ShoppingBag } from 'lucide-react';
+import { Heart, ShoppingBag } from '@/components/common/Icons';
 import { Product, StoreSettings } from '@/lib/types';
 import ProductGrid from './ProductGrid';
 

@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   ChevronLeft, ShoppingBag, Send, HelpCircle, Plus, Minus, Trash2,
-  Shield, Truck, Tag, X, ShoppingCart, Package, CheckCircle2, ChevronRight
+  Shield, Truck, Tag, X, ShoppingCart, Package, CheckCircle2, ChevronRight,
+  Lock, ArrowRight
 } from '@/components/common/Icons';
 import { StoreSettings, ShippingMethod } from '@/lib/types';
 import { useCartStore } from '@/store/cartStore';
@@ -572,10 +573,11 @@ export default function CartContainer({ settings }: CartContainerProps) {
               <button
                 type="button"
                 onClick={() => setView('checkout')}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#e94560] hover:bg-[#d8344e] active:scale-98 text-white px-5 py-4 text-base font-black transition-all duration-200 shadow-lg shadow-red-500/20 cursor-pointer"
+                className="flex w-full items-center justify-center gap-2.5 rounded-2xl bg-[#1a1a2e] dark:bg-white text-white dark:text-[#1a1a2e] hover:bg-[#e94560] dark:hover:bg-[#e94560] dark:hover:text-white active:scale-98 px-5 py-4.5 text-base font-black transition-all duration-200 shadow-xl shadow-gray-900/10 dark:shadow-white/5 cursor-pointer group"
               >
-                <span>Proceed to Checkout</span>
-                <ChevronRight className="h-5 w-5" />
+                <Lock className="h-5 w-5 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity" />
+                <span>Secure Checkout</span>
+                <ArrowRight className="h-5 w-5 shrink-0 group-hover:translate-x-1 transition-transform" />
               </button>
 
               <p className="text-center text-xs text-gray-400 font-semibold">

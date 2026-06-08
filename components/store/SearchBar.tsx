@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search } from 'lucide-react';
+import { Search } from '@/components/common/Icons';
 
 interface SearchBarProps {
   value: string;

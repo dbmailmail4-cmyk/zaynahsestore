@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { 
   User, Mail, Phone, Calendar, ShoppingBag, LogOut, 
   ChevronDown, ChevronUp, Package, MapPin, Truck, ExternalLink 
-} from 'lucide-react';
+} from '@/components/common/Icons';
 import { customerLogout } from '@/lib/services/customers';
 import { Order } from '@/lib/types';
 import { formatPrice } from '@/lib/utils/whatsapp';

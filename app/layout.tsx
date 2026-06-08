@@ -72,9 +72,9 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${jakarta.variable} ${outfit.variable} h-full antialiased`}
+      className={`${jakarta.variable} ${outfit.variable} h-full antialiased overflow-x-hidden`}
     >
-      <body className={`${jakarta.variable} ${outfit.variable} font-body min-h-full flex flex-col bg-gray-50 dark:bg-[#0f0f1b] text-gray-900 dark:text-gray-100`}>
+      <body className={`${jakarta.variable} ${outfit.variable} font-body min-h-full flex flex-col bg-gray-50 dark:bg-[#0f0f1b] text-gray-900 dark:text-gray-100 overflow-x-hidden`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

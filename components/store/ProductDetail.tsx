@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import useEmblaCarousel from 'embla-carousel-react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -59,6 +60,58 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const imgContainerRef = useRef<HTMLDivElement>(null);
+
+  // Embla carousel for mobile touch swipe
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    loop: true,
+    startIndex: activeImageIndex
+  });
+
+  // Keep Embla in sync when activeImageIndex changes from outside (thumbnails / variant selector)
+  useEffect(() => {
+    if (emblaApi) {
+      emblaApi.scrollTo(activeImageIndex, true);
+    }
+  }, [activeImageIndex, emblaApi]);
+
+  // Keep activeImageIndex in sync when user swipes
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => {
+      setActiveImageIndex(emblaApi.selectedScrollSnap());
+    };
+    emblaApi.on('select', onSelect);
+    return () => {
+      emblaApi.off('select', onSelect);
+    };
+  }, [emblaApi]);
+
+  // Lightbox swipe gesture handlers
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (images.length <= 1) return;
+    const diff = touchStartX.current - touchEndX.current;
+    const swipeThreshold = 50; // min px to trigger swipe
+    if (diff > swipeThreshold) {
+      // Swipe Left -> Next Image
+      setActiveImageIndex(i => (i + 1) % images.length);
+    } else if (diff < -swipeThreshold) {
+      // Swipe Right -> Prev Image
+      setActiveImageIndex(i => (i - 1 + images.length) % images.length);
+    }
+    touchStartX.current = 0;
+    touchEndX.current = 0;
+  };
 
   // Selection states
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | undefined>(
@@ -263,36 +316,47 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
           {/* Main image with arrows + hover zoom */}
           <div
             ref={imgContainerRef}
-            className="relative aspect-square w-full overflow-hidden rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-transparent group cursor-zoom-in"
-            onMouseMove={(e) => {
-              // Don't zoom if the mouse is directly over a child with pointer-events (arrows)
-              if ((e.target as HTMLElement).closest('button')) return;
-              if (!imgContainerRef.current) return;
-              const rect = imgContainerRef.current.getBoundingClientRect();
-              const x = ((e.clientX - rect.left) / rect.width) * 100;
-              const y = ((e.clientY - rect.top) / rect.height) * 100;
-              setZoomPos({ x, y });
-              setIsZoomed(true);
-            }}
-            onMouseLeave={() => setIsZoomed(false)}
-            onClick={() => setLightboxOpen(true)}
+            className="relative aspect-square w-full overflow-hidden rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-transparent group"
           >
-            <Image
-              src={images[activeImageIndex]?.url ?? activeImage}
-              alt={product.name}
-              fill
-              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 600px"
-              className={`object-cover transition-transform duration-200 ease-out ${
-                isZoomed ? 'scale-[1.75]' : 'scale-100'
-              }`}
-              style={isZoomed ? { transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` } : {}}
-              priority
-              unoptimized={true}
-            />
+            {/* Embla Viewport */}
+            <div className="overflow-hidden w-full h-full cursor-zoom-in" ref={emblaRef} onClick={() => setLightboxOpen(true)}>
+              <div className="flex h-full">
+                {images.map((img, i) => (
+                  <div
+                    key={img.id || i}
+                    className="relative flex-none w-full h-full select-none overflow-hidden"
+                    onMouseMove={(e) => {
+                      if ((e.target as HTMLElement).closest('button')) return;
+                      if (!imgContainerRef.current) return;
+                      const rect = imgContainerRef.current.getBoundingClientRect();
+                      const x = ((e.clientX - rect.left) / rect.width) * 100;
+                      const y = ((e.clientY - rect.top) / rect.height) * 100;
+                      setZoomPos({ x, y });
+                      setIsZoomed(true);
+                    }}
+                    onMouseLeave={() => setIsZoomed(false)}
+                  >
+                    <Image
+                      src={img.url}
+                      alt={product.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 600px"
+                      className={`object-cover transition-transform duration-200 ease-out ${isZoomed && i === activeImageIndex ? 'scale-[1.75]' : 'scale-100'
+                        }`}
+                      style={isZoomed && i === activeImageIndex ? { transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` } : {}}
+                      priority={i === 0}
+                      unoptimized={true}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Zoom icon hint */}
-            <div className="absolute top-3 right-3 bg-white/80 dark:bg-black/50 rounded-lg p-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            <div className="absolute top-3 right-3 bg-white/80 dark:bg-black/50 rounded-lg p-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
               <ZoomIn className="w-4 h-4 text-gray-700 dark:text-gray-300" />
             </div>
+
             {/* Prev Arrow */}
             {images.length > 1 && (
               <button
@@ -306,6 +370,7 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                 <ChevronLeft className="w-5 h-5" />
               </button>
             )}
+
             {/* Next Arrow */}
             {images.length > 1 && (
               <button
@@ -319,6 +384,7 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                 <ChevronRight className="w-5 h-5" />
               </button>
             )}
+
             {/* Dot indicators */}
             {images.length > 1 && (
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
@@ -326,12 +392,10 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                   <button
                     key={i}
                     type="button"
-                    onMouseEnter={() => setIsZoomed(false)}
                     onMouseMove={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); setActiveImageIndex(i); }}
-                    className={`w-1.5 h-1.5 rounded-full transition-all cursor-pointer ${
-                      i === activeImageIndex ? 'bg-white scale-125 shadow' : 'bg-white/50'
-                    }`}
+                    className={`w-1.5 h-1.5 rounded-full transition-all cursor-pointer ${i === activeImageIndex ? 'bg-white scale-125 shadow' : 'bg-white/50'
+                      }`}
                   />
                 ))}
               </div>
@@ -345,11 +409,10 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                 <button
                   key={i}
                   onClick={() => setActiveImageIndex(i)}
-                  className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border transition-all cursor-pointer ${
-                    i === activeImageIndex
+                  className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border transition-all cursor-pointer ${i === activeImageIndex
                       ? 'border-[#e94560] ring-2 ring-[#e94560]/10'
                       : 'border-gray-200 dark:border-gray-800 hover:border-gray-400'
-                  }`}
+                    }`}
                 >
                   <Image
                     src={img.url}
@@ -511,8 +574,8 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                         key={mod.id}
                         onClick={() => handleModifierToggle(mod)}
                         className={`flex w-full items-center justify-between p-3.5 border rounded-xl transition-all cursor-pointer ${isSelected
-                            ? 'border-[#1a1a2e] bg-[#1a1a2e]/5 dark:border-[#e94560] dark:bg-[#e94560]/10'
-                            : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 bg-white dark:bg-[#16162a]'
+                          ? 'border-[#1a1a2e] bg-[#1a1a2e]/5 dark:border-[#e94560] dark:bg-[#e94560]/10'
+                          : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 bg-white dark:bg-[#16162a]'
                           }`}
                       >
                         <div className="flex items-center gap-2">
@@ -608,8 +671,8 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                 <button
                   onClick={toggleWishlist}
                   className={`p-3.5 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${isWishlisted
-                      ? 'border-red-200 bg-red-50 text-red-500 dark:border-red-900/35 dark:bg-red-500/10'
-                      : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400'
+                    ? 'border-red-200 bg-red-50 text-red-500 dark:border-red-900/35 dark:bg-red-500/10'
+                    : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400'
                     }`}
                   aria-label="Toggle Wishlist"
                 >
@@ -668,8 +731,8 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 block">
                 {settings.safeCheckoutText || 'Guarantee Safe Checkout:'}
               </span>
-              <PaymentBadges 
-                methods={settings.safeCheckoutMethods} 
+              <PaymentBadges
+                methods={settings.safeCheckoutMethods}
                 className="flex flex-wrap items-center justify-center gap-2"
               />
             </div>
@@ -702,11 +765,10 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                   return (
                     <React.Fragment key={bp.id}>
                       <span className="text-gray-400 font-bold text-lg">+</span>
-                      <div 
+                      <div
                         onClick={() => setSelectedBundleIds(prev => prev.includes(bp.id) ? prev.filter(id => id !== bp.id) : [...prev, bp.id])}
-                        className={`flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-2 rounded-xl w-full border cursor-pointer transition-all ${
-                          isChecked ? 'border-amber-500' : 'border-gray-100 dark:border-gray-850'
-                        }`}
+                        className={`flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-2 rounded-xl w-full border cursor-pointer transition-all ${isChecked ? 'border-amber-500' : 'border-gray-100 dark:border-gray-850'
+                          }`}
                       >
                         <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-105 flex-shrink-0">
                           {bp.images?.[0]?.url && (
@@ -721,9 +783,8 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-gray-850 dark:text-white truncate flex items-center gap-1.5">
-                            <span className={`w-3.5 h-3.5 flex items-center justify-center rounded border text-[8px] ${
-                              isChecked ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-300 bg-white dark:bg-transparent'
-                            }`}>
+                            <span className={`w-3.5 h-3.5 flex items-center justify-center rounded border text-[8px] ${isChecked ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-300 bg-white dark:bg-transparent'
+                              }`}>
                               {isChecked && '✓'}
                             </span>
                             {bp.name}
@@ -764,11 +825,10 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
               <button
                 type="button"
                 onClick={() => setActiveDetailTab('description')}
-                className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${
-                  activeDetailTab === 'description'
+                className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${activeDetailTab === 'description'
                     ? 'text-[#e94560] border-b-2 border-[#e94560]'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white'
-                }`}
+                  }`}
               >
                 Description
               </button>
@@ -777,11 +837,10 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                 <button
                   type="button"
                   onClick={() => setActiveDetailTab('faq')}
-                  className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${
-                    activeDetailTab === 'faq'
+                  className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${activeDetailTab === 'faq'
                       ? 'text-[#e94560] border-b-2 border-[#e94560]'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white'
-                  }`}
+                    }`}
                 >
                   FAQ
                 </button>
@@ -791,11 +850,10 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                 <button
                   type="button"
                   onClick={() => setActiveDetailTab('returns')}
-                  className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${
-                    activeDetailTab === 'returns'
+                  className={`text-sm font-bold pb-2 transition-all cursor-pointer relative shrink-0 ${activeDetailTab === 'returns'
                       ? 'text-[#e94560] border-b-2 border-[#e94560]'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white'
-                  }`}
+                    }`}
                 >
                   Return & Exchange
                 </button>
@@ -806,9 +864,8 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
             <div className="py-6 text-sm text-gray-650 dark:text-gray-300 leading-relaxed font-medium animate-fade-in prose dark:prose-invert max-w-none">
               {activeDetailTab === 'description' && product.description && (
                 <div>
-                  <div className={`relative transition-all duration-300 overflow-hidden ${
-                    !isDescExpanded ? 'max-h-48' : 'max-h-none'
-                  }`}>
+                  <div className={`relative transition-all duration-300 overflow-hidden ${!isDescExpanded ? 'max-h-48' : 'max-h-none'
+                    }`}>
                     {isHtml(product.description) ? (
                       <div dangerouslySetInnerHTML={{ __html: product.description }} />
                     ) : (
@@ -950,8 +1007,11 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
       {/* Lightbox Modal */}
       {lightboxOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in touch-none select-none"
           onClick={() => setLightboxOpen(false)}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           {/* Close button */}
           <button
@@ -1011,9 +1071,8 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                   key={i}
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setActiveImageIndex(i); }}
-                  className={`w-2 h-2 rounded-full transition-all cursor-pointer ${
-                    i === activeImageIndex ? 'bg-white scale-125' : 'bg-white/40'
-                  }`}
+                  className={`w-2 h-2 rounded-full transition-all cursor-pointer ${i === activeImageIndex ? 'bg-white scale-125' : 'bg-white/40'
+                    }`}
                 />
               ))}
             </div>
@@ -1034,7 +1093,7 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
             <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-wider mb-4">
               📏 {sizeGuide.name}
             </h3>
-            
+
             {sizeGuide.imageUrl && (
               <div className="relative w-full h-48 sm:h-64 rounded-2xl overflow-hidden bg-gray-50 dark:bg-white/5 mb-6 border border-gray-100 dark:border-gray-800 flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

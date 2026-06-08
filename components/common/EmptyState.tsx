@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag } from 'lucide-react';
+import { ShoppingBag } from '@/components/common/Icons';
 
 interface EmptyStateProps {
   title?: string;

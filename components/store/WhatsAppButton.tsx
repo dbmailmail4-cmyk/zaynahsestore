@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Send } from 'lucide-react';
+import { Send } from '@/components/common/Icons';
 import { useCartStore } from '@/store/cartStore';
 import { StoreSettings } from '@/lib/types';
 import { generateWhatsAppMessage, buildWhatsAppURL, formatPrice } from '@/lib/utils/whatsapp';

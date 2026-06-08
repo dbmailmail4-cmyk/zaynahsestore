@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import useEmblaCarousel from 'embla-carousel-react';
 import {
   X,
   ShoppingCart,
@@ -11,7 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-} from 'lucide-react';
+} from '@/components/common/Icons';
 import { Product, ProductVariant, StoreSettings } from '@/lib/types';
 import { useCartStore } from '@/store/cartStore';
 import { formatPrice } from '@/lib/utils/whatsapp';
@@ -40,6 +41,31 @@ export default function QuickViewModal({ product, settings, onClose }: QuickView
   const [activeIdx, setActiveIdx] = useState(
     Math.max(0, images.findIndex(img => img.isPrimary))
   );
+
+  // Embla carousel for mobile touch swipe
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    loop: true,
+    startIndex: activeIdx
+  });
+
+  // Keep Embla in sync when activeIdx changes from outside
+  useEffect(() => {
+    if (emblaApi) {
+      emblaApi.scrollTo(activeIdx, true);
+    }
+  }, [activeIdx, emblaApi]);
+
+  // Keep activeIdx in sync when user swipes
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => {
+      setActiveIdx(emblaApi.selectedScrollSnap());
+    };
+    emblaApi.on('select', onSelect);
+    return () => {
+      emblaApi.off('select', onSelect);
+    };
+  }, [emblaApi]);
 
   const activeVariants = product.variants.filter(v => v.active);
 
@@ -118,22 +144,28 @@ export default function QuickViewModal({ product, settings, onClose }: QuickView
 
             {/* ── Image Gallery ─────────────────────────────────────────── */}
             <div className="relative bg-gray-50 dark:bg-black/20">
-              <div className="relative aspect-square w-full overflow-hidden">
-                <Image
-                  src={images[activeIdx]?.url}
-                  alt={product.name}
-                  fill
-                  sizes="(max-width: 640px) 100vw, 50vw"
-                  className="object-cover"
-                  priority
-                  unoptimized={true}
-                />
+              <div className="relative aspect-square w-full overflow-hidden" ref={emblaRef}>
+                <div className="flex h-full animate-fade-in">
+                  {images.map((img, i) => (
+                    <div key={img.id || i} className="relative flex-none w-full h-full select-none overflow-hidden">
+                      <Image
+                        src={img.url}
+                        alt={product.name}
+                        fill
+                        sizes="(max-width: 640px) 100vw, 50vw"
+                        className="object-cover"
+                        priority={i === 0}
+                        unoptimized={true}
+                      />
+                    </div>
+                  ))}
+                </div>
                 {images.length > 1 && (
                   <>
                     <button
                       type="button"
                       onClick={() => setActiveIdx(i => (i - 1 + images.length) % images.length)}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-white/90 dark:bg-black/60 shadow text-gray-700 dark:text-white hover:bg-white dark:hover:bg-black transition-all cursor-pointer"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white/90 dark:bg-black/60 shadow text-gray-700 dark:text-white hover:bg-white dark:hover:bg-black transition-all cursor-pointer"
                       aria-label="Previous image"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -141,7 +173,7 @@ export default function QuickViewModal({ product, settings, onClose }: QuickView
                     <button
                       type="button"
                       onClick={() => setActiveIdx(i => (i + 1) % images.length)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-white/90 dark:bg-black/60 shadow text-gray-700 dark:text-white hover:bg-white dark:hover:bg-black transition-all cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white/90 dark:bg-black/60 shadow text-gray-700 dark:text-white hover:bg-white dark:hover:bg-black transition-all cursor-pointer"
                       aria-label="Next image"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -149,7 +181,7 @@ export default function QuickViewModal({ product, settings, onClose }: QuickView
                   </>
                 )}
                 {images.length > 1 && (
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
                     {images.map((_, i) => (
                       <button
                         key={i}

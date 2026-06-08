@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { SlidersHorizontal, Grid3X3, Grid2X2, List, X, Heart, Star, ShoppingCart } from 'lucide-react';
+import { SlidersHorizontal, Grid3X3, Grid2X2, List, X, Heart, Star, ShoppingCart } from '@/components/common/Icons';
 import { Product, Category, StoreSettings } from '@/lib/types';
 import ProductCard from './ProductCard';
 import EmptyState from '../common/EmptyState';

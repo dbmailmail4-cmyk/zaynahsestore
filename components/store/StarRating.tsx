@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Star } from 'lucide-react';
+import { Star } from '@/components/common/Icons';
 
 interface StarRatingProps {
   rating: number; // 0 to 5
