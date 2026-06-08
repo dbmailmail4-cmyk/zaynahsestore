@@ -763,13 +763,16 @@ export default function ShopPage({
         </div>
       </div>
 
-      {/* MOBILE FILTER DRAWER SHEET — slides in from top */}
+      {/* MOBILE FILTER DRAWER SHEET — slides in from the side */}
       {mobileFilterOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col justify-start"
-          onClick={(e) => { if (e.target === e.currentTarget) setMobileFilterOpen(false); }}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end transition-all duration-300 animate-fade-in"
+          onClick={() => setMobileFilterOpen(false)}
         >
-          <div className="bg-white dark:bg-[#16162a] w-full max-h-[85vh] shadow-2xl flex flex-col animate-slide-down rounded-b-2xl overflow-hidden">
+          <div 
+            className="bg-white dark:bg-[#16162a] w-4/5 max-w-xs h-[100dvh] shadow-2xl relative flex flex-col overflow-hidden scale-up duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Sticky Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
               <span className="font-black text-gray-900 dark:text-white uppercase tracking-wider text-sm flex items-center gap-1.5">

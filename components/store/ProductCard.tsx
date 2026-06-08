@@ -153,9 +153,9 @@ export default function ProductCard({ product, currencySymbol = 'Rs.', settings 
               fill
               sizes="(max-width: 768px) 50vw, 25vw"
               className={`object-cover transition-all duration-500 ${
-                settings?.imageHoverStyle === 'zoom' ? (touchActive ? 'scale-105' : 'group-hover:scale-105') : ''
+                settings?.imageHoverStyle === 'zoom' ? (touchActive ? 'scale-105' : 'group-hover:scale-105 group-active:scale-105') : ''
               } ${
-                secondImage ? (touchActive ? 'opacity-0' : 'opacity-100 group-hover:opacity-0') : ''
+                secondImage ? (touchActive ? 'opacity-0' : 'opacity-100 group-hover:opacity-0 group-active:opacity-0') : ''
               }`}
               priority={false}
               unoptimized={true}
@@ -168,7 +168,7 @@ export default function ProductCard({ product, currencySymbol = 'Rs.', settings 
                 sizes="(max-width: 768px) 50vw, 25vw"
                 className={`object-cover absolute inset-0 transition-opacity duration-500 ${
                   touchActive ? 'opacity-100' : 'opacity-0'
-                } group-hover:opacity-100`}
+                } group-hover:opacity-100 group-active:opacity-100`}
                 priority={false}
                 unoptimized={true}
               />
