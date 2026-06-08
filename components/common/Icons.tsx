@@ -10,9 +10,15 @@ export {
   X,
   Heart,
   ChevronDown,
+  ChevronUp,
+  GripVertical,
+  Smartphone,
+  Monitor,
   User,
   Plus,
   Minus,
+  Check,
+  Play,
   Trash2,
   Shield,
   Truck,
@@ -37,6 +43,8 @@ export {
   Phone,
   Mail,
   TrendingUp,
+  Share2,
+  Copy,
   DollarSign,
   Calendar,
   ArrowUpRight,
@@ -49,5 +57,12 @@ export {
   Lock,
   Clock,
   Gift,
-  Headphones
+  Headphones,
+  ZoomIn,
+  Ruler,
+  Upload,
+  Image,
+  Loader2,
+  Edit2
 } from 'lucide-react';
+

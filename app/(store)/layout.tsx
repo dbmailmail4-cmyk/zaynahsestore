@@ -4,6 +4,8 @@ import CartBar from '@/components/store/CartBar';
 import Footer from '@/components/common/Footer';
 import MobileBottomNav from '@/components/common/MobileBottomNav';
 import FloatingContacts from '@/components/common/FloatingContacts';
+import PremiumFeaturesProvider from '@/components/store/PremiumFeaturesProvider';
+import CartDrawer from '@/components/store/CartDrawer';
 import { getSettings } from '@/lib/services/settings';
 
 export const revalidate = 0; // Dynamic rendering
@@ -25,7 +27,8 @@ export default async function StoreLayout({
       <CartBar currencySymbol={settings.currencySymbol} />
       <MobileBottomNav />
       <FloatingContacts settings={settings} />
+      <PremiumFeaturesProvider settings={settings} />
+      <CartDrawer settings={settings} />
     </div>
   );
-
 }

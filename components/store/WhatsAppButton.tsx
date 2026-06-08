@@ -4,7 +4,7 @@ import React from 'react';
 import { Send } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { StoreSettings } from '@/lib/types';
-import { generateWhatsAppMessage, buildWhatsAppURL } from '@/lib/utils/whatsapp';
+import { generateWhatsAppMessage, buildWhatsAppURL, formatPrice } from '@/lib/utils/whatsapp';
 import { createOrder } from '@/lib/services/orders';
 import { toast } from 'sonner';
 
@@ -25,6 +25,7 @@ export default function WhatsAppButton({
 }: WhatsAppButtonProps) {
   const items = useCartStore(state => state.items);
   const totalPrice = useCartStore(state => state.totalPrice());
+  const appliedCoupon = useCartStore(state => state.appliedCoupon);
   const clearCart = useCartStore(state => state.clearCart);
   const [loading, setLoading] = React.useState(false);
 
@@ -45,14 +46,29 @@ export default function WhatsAppButton({
     try {
       setLoading(true);
       
+      // Calculate coupon discount
+      const couponDiscountAmount = (() => {
+        if (!appliedCoupon) return 0;
+        if (appliedCoupon.discountType === 'percentage') {
+          return Math.round((totalPrice * appliedCoupon.value) / 100);
+        } else {
+          return Math.min(appliedCoupon.value, totalPrice);
+        }
+      })();
+
+      const finalTotal = Math.max(0, totalPrice - couponDiscountAmount);
+
       // Calculate order sequence
       const orderData = {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         items,
         subtotal: totalPrice,
-        total: totalPrice,
-        notes: notes.trim() || undefined
+        total: finalTotal,
+        notes: [
+          notes.trim(),
+          couponDiscountAmount > 0 ? `Coupon Applied: ${appliedCoupon?.code} (-${formatPrice(couponDiscountAmount, settings.currencySymbol)})` : ''
+        ].filter(Boolean).join('\n') || undefined
       };
 
       // 1. Create order in Supabase database
@@ -69,6 +85,9 @@ export default function WhatsAppButton({
         `• Name: ${customerName.trim()}`,
         `• Phone: ${customerPhone.trim()}`,
         notes.trim() ? `• Notes: ${notes.trim()}` : '',
+        couponDiscountAmount > 0 ? `• Coupon Discount (${appliedCoupon?.code}): -${formatPrice(couponDiscountAmount, settings.currencySymbol)}` : '',
+        `*Grand Total: ${formatPrice(finalTotal, settings.currencySymbol)}*`,
+        ``,
         `• Order No: ${order.orderNumber}`
       ].filter(Boolean).join('\n');
 

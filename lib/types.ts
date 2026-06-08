@@ -84,6 +84,11 @@ export interface Product {
   modifiers: ProductModifier[];
   rating?: number;
   reviewsCount?: number;
+  sizeGuideId?: string;
+  sizeGuide?: SizeGuide;
+  frequentlyBoughtTogetherIds?: string[];
+  flashSaleEnabled?: boolean;
+  flashSaleEndDate?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -216,7 +221,86 @@ export interface StoreSettings {
   floatingSnapchatEnabled: boolean;
   floatingTwitterEnabled: boolean;
 
+  // Customizer & Premium Theme Settings
+  exit_intent_enabled?: boolean;
+  exit_intent_title?: string;
+  exit_intent_text?: string;
+  exit_intent_coupon?: string;
+  spin_wheel_enabled?: boolean;
+  spin_wheel_segments?: string[];
+  cart_timer_minutes?: number;
+  free_shipping_threshold?: number;
+  volume_discount_threshold?: number;
+  volume_discount_percentage?: number;
+  recent_buyers?: { name: string; city: string }[] | string; // JSONB can be string or array
+  recently_viewed_limit?: number;
+  recent_buyers_enabled?: boolean;
+  cookie_consent_enabled?: boolean;
+  free_shipping_bar_enabled?: boolean;
+  volume_discounts_enabled?: boolean;
+  frequently_bought_together_enabled?: boolean;
+  stock_urgency_enabled?: boolean;
+  flash_sale_enabled?: boolean;
+  social_feeds_enabled?: boolean;
+  cart_timer_enabled?: boolean;
+  size_guide_enabled?: boolean;
+
+  recent_buyers_names?: string;
+  recent_buyers_cities?: string;
+  recent_buyers_source?: 'simulated' | 'real';
+  recent_buyers_product_pool?: 'any' | 'featured' | 'sale' | 'recent' | 'custom';
+  recent_buyers_custom_products?: string[] | string;
+  recent_buyers_initial_delay?: number;
+  recent_buyers_interval?: number;
+  recent_buyers_display_duration?: number;
+  exit_intent_image_url?: string;
+  exit_intent_delay_mobile?: number;
+  cookie_consent_text?: string;
+  cookie_consent_button_text?: string;
+
+  social_feeds_homepage_enabled?: boolean;
+  social_feeds_product_enabled?: boolean;
+  social_feeds_title?: string;
+  social_feeds_subtitle?: string;
+  social_feeds_desc?: string;
+  social_feeds_items?: any;
+  cart_timer_message?: string;
+  coupon_codes_enabled?: boolean;
+
   updatedAt: string;
+}
+
+export interface RecentBuyer {
+  name: string;
+  city: string;
+}
+
+export interface SizeGuide {
+  id: string;
+  name: string;
+  chart_data: Array<Record<string, string>>;
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HomepageSection {
+  id: string;
+  section_type: 'hero_banner' | 'product_grid' | 'category_list' | 'promo_banner' | 'trust_badges' | 'recent_reviews' | 'brands_logos' | 'category_grid';
+  title?: string;
+  settings: Record<string, any>;
+  content_data: Record<string, any>;
+  sort_order: number;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WhatsAppSubscriber {
+  id: string;
+  name?: string;
+  phone: string;
+  created_at?: string;
 }
 
 export interface NavigationItem {
@@ -290,4 +374,15 @@ export interface VariantPreset {
   attribute: 'color' | 'size' | 'material' | 'custom';
   values: VariantPresetValue[];
   createdAt: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  discountType: 'percentage' | 'fixed';
+  value: number;
+  minCartAmount?: number;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }

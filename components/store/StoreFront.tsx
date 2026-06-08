@@ -3,12 +3,12 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Product, Category, StoreSettings, Review } from '@/lib/types';
+import { Product, Category, StoreSettings, Review, HomepageSection } from '@/lib/types';
 import CategoryFilter from './CategoryFilter';
 import ProductGrid from './ProductGrid';
 import { useSearchStore } from '@/store/searchStore';
 import { 
-  Truck, Shield, RefreshCw, Phone, HelpCircle, Award, Star, Lock, Clock, Gift, Headphones 
+  Truck, Shield, RefreshCw, Phone, HelpCircle, Award, Star, Lock, Clock, Gift, Headphones, Play 
 } from '@/components/common/Icons';
 import StarRating from './StarRating';
 import { format, parseISO } from 'date-fns';
@@ -18,16 +18,43 @@ interface StoreFrontProps {
   categories: Category[];
   settings: StoreSettings;
   reviews?: (Review & { productName?: string; productSlug?: string })[];
+  sections?: HomepageSection[];
 }
 
 export default function StoreFront({
   initialProducts,
   categories,
   settings,
-  reviews = []
+  reviews = [],
+  sections = []
 }: StoreFrontProps) {
   const searchQuery = useSearchStore((state) => state.searchQuery);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined);
+
+  const parsedFeeds = useMemo(() => {
+    const items = settings.social_feeds_items;
+    if (!items) return [];
+    try {
+      const arr = typeof items === 'string' ? JSON.parse(items) : items;
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }, [settings.social_feeds_items]);
+
+  const activeSections = useMemo(() => {
+    if (sections && sections.length > 0) {
+      return sections.filter(s => s.active);
+    }
+    // Fallback default sections
+    return [
+      { id: 'def-hero', section_type: 'hero_banner', title: 'Hero Slider', settings: {}, content_data: {}, sort_order: 1, active: true },
+      { id: 'def-cats', section_type: 'category_list', title: 'Shop By Category', settings: {}, content_data: {}, sort_order: 2, active: true },
+      { id: 'def-grid', section_type: 'product_grid', title: 'Featured Collection', settings: { limit: 8, columns_desktop: 4, columns_mobile: 2, source: 'all' }, content_data: {}, sort_order: 3, active: true },
+      { id: 'def-trust', section_type: 'trust_badges', title: 'Our Guarantees', settings: {}, content_data: {}, sort_order: 4, active: true },
+      { id: 'def-revs', section_type: 'recent_reviews', title: 'Customer Feedback', settings: { limit: 3 }, content_data: {}, sort_order: 5, active: true }
+    ] as HomepageSection[];
+  }, [sections]);
 
   // Filter products based on search query and category
   const filteredProducts = useMemo(() => {
@@ -108,44 +135,76 @@ export default function StoreFront({
     }
   };
 
-  return (
-    <div className="space-y-6 pb-12 min-h-screen bg-gray-50 dark:bg-[#0f0f1b] text-gray-900 dark:text-gray-100 transition-colors duration-200">
-      {/* Banner / Hero */}
-      {settings.bannerUrl ? (
-        <div className="relative h-44 w-full bg-[#1a1a2e] sm:h-64 overflow-hidden">
-          <Image
-            src={settings.bannerUrl}
-            alt={settings.storeName}
-            fill
-            sizes="100vw"
-            priority
-            unoptimized={true}
-            className="object-cover opacity-80"
-          />
-          <div className="absolute inset-0 flex flex-col justify-end p-5 bg-gradient-to-t from-[#1a1a2e]/90 to-transparent">
-            {settings.tagline && (
-              <p className="text-white/80 text-xs font-semibold uppercase tracking-wider mb-1">
-                {settings.tagline}
-              </p>
-            )}
-            <h1 className="text-white text-2xl font-bold md:text-4xl">
-              {settings.storeName}
-            </h1>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-gradient-to-r from-[#1a1a2e] to-[#e94560] text-white p-8 shadow-sm text-center">
+  const renderHeroBanner = (section: HomepageSection) => {
+    const heightDesktop = section.settings?.height_desktop ?? '450px';
+    const heightMobile = section.settings?.height_mobile ?? '220px';
+    const opacity = section.settings?.overlay_opacity ?? 0.3;
+    const bannerUrl = section.content_data?.image_url || settings.bannerUrl;
+    const buttonText = section.content_data?.button_text || 'Shop Now';
+    const buttonLink = section.content_data?.button_link || '/shop';
+
+    return (
+      <div 
+        key={section.id} 
+        style={{ 
+          height: heightMobile,
+          '--height-desktop': heightDesktop,
+          '--height-mobile': heightMobile
+        } as React.CSSProperties}
+        className="relative md:h-[var(--height-desktop)] w-full bg-[#1a1a2e] overflow-hidden"
+      >
+        {bannerUrl ? (
+          <>
+            <Image
+              src={bannerUrl}
+              alt={section.title || settings.storeName}
+              fill
+              sizes="100vw"
+              priority
+              unoptimized={true}
+              className="object-cover"
+            />
+            <div 
+              className="absolute inset-0 bg-black" 
+              style={{ opacity }} 
+            />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-r from-[#1a1a2e] to-[#e94560]" />
+        )}
+        <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-6 bg-gradient-to-t from-black/55 to-transparent">
           {settings.tagline && (
-            <p className="text-white/80 text-xs font-semibold uppercase tracking-wider mb-1">
+            <p className="text-white/80 text-xs font-semibold uppercase tracking-wider mb-2">
               {settings.tagline}
             </p>
           )}
-          <h1 className="text-2xl font-bold md:text-3xl">{settings.storeName}</h1>
+          <h1 className="text-white text-2xl font-black md:text-5xl tracking-tight max-w-2xl font-serif">
+            {section.title || settings.storeName}
+          </h1>
+          {section.content_data?.subtitle && (
+            <p className="text-white/70 text-xs sm:text-sm mt-2 max-w-md">
+              {section.content_data.subtitle}
+            </p>
+          )}
+          <Link 
+            href={buttonLink}
+            className="mt-6 px-6 py-2.5 bg-[#e94560] hover:bg-[#d83550] text-white text-xs font-bold uppercase rounded-xl transition-all shadow-lg active:scale-95 cursor-pointer"
+          >
+            {buttonText}
+          </Link>
         </div>
-      )}
+      </div>
+    );
+  };
 
-      {/* Filters & Search */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
+  const renderCategoryList = (section: HomepageSection) => {
+    return (
+      <div key={section.id} className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-4">
+        {section.title && (
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500 mb-3 text-center md:text-left">
+            {section.title}
+          </h3>
+        )}
         {settings.enableCategoryFilter && (
           <CategoryFilter
             categories={categories}
@@ -153,178 +212,380 @@ export default function StoreFront({
             onSelectCategory={setSelectedCategoryId}
           />
         )}
+      </div>
+    );
+  };
 
-        {/* Product Listing */}
-        <div className="pt-2">
-          <ProductGrid products={filteredProducts} currencySymbol={settings.currencySymbol} settings={settings} />
-        </div>
+  const renderProductGrid = (section: HomepageSection) => {
+    const limit = section.settings?.limit ?? 8;
+    const source = section.settings?.source ?? 'all';
+    
+    // Filter display products dynamically based on source setting
+    const displayProducts = (() => {
+      let prodList = filteredProducts;
+      if (selectedCategoryId) {
+        prodList = prodList.filter(p => p.categoryId === selectedCategoryId);
+      } else if (source === 'featured') {
+        prodList = prodList.filter(p => p.isFeatured);
+      } else if (source !== 'all' && source !== 'featured') {
+        prodList = prodList.filter(p => p.categoryId === source || p.category?.slug === source);
+      }
+      return prodList.slice(0, limit);
+    })();
 
-        {/* Homepage Reviews Grid */}
-        {!searchQuery && reviews && reviews.length > 0 && (
-          <div className="pt-16 pb-8 border-t border-gray-200 dark:border-gray-800 transition-colors duration-200">
-            <div className="text-center space-y-2 mb-10">
-              <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white md:text-3xl">
-                What Our Customers Say
-              </h2>
-              <div className="flex items-center justify-center gap-1.5 text-amber-400 text-sm">
-                <span>★★★★★</span>
-                <span className="text-xs font-bold text-gray-500 dark:text-gray-400">Trusted by hundreds of happy customers</span>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {reviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="flex gap-4 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#16162a] shadow-sm text-gray-900 dark:text-white transition-colors duration-200"
-                >
-                  {/* Avatar */}
-                  <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white uppercase shadow-sm ${getAvatarColorClass(review.customerName)}`}>
-                    {getInitials(review.customerName)}
-                  </div>
-
-                  {/* Details */}
-                  <div className="flex-1 space-y-2">
-                    {/* Stars & Date */}
-                    <div className="flex items-center justify-between gap-4">
-                      <StarRating rating={review.rating} showText={false} starSize={12} />
-                      <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500">
-                        {formatDate(review.createdAt)}
-                      </span>
-                    </div>
-
-                    {/* Name & Badge */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-extrabold text-sm text-gray-950 dark:text-white">
-                        {review.customerName}
-                      </span>
-                      <div className="flex items-center gap-0.5 text-[9px] font-bold text-[#10b981] bg-[#10b981]/10 dark:bg-[#10b981]/15 px-1.5 py-0.5 rounded-full select-none">
-                        <span className="text-[8px] font-bold">✓</span>
-                        <span>Verified Buyer</span>
-                      </div>
-                    </div>
-
-                    {/* Review Comment */}
-                    {review.comment && (
-                      <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-semibold">
-                        "{review.comment}"
-                      </p>
-                    )}
-
-                    {/* Product Reviewed Reference */}
-                    {review.productName && review.productSlug && (
-                      <div className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-500 dark:text-gray-400 font-bold">
-                        Reviewed product: <Link href={`/product/${review.productSlug}`} className="text-[#e94560] hover:underline transition-colors">{review.productName}</Link>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+    return (
+      <div key={section.id} className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        {section.title && !selectedCategoryId && (
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3 mb-6">
+            <h2 className="text-base font-black uppercase tracking-wider text-gray-900 dark:text-white">
+              {section.title}
+            </h2>
+            <Link href="/shop" className="text-xs font-bold text-[#e94560] hover:underline">
+              View All
+            </Link>
           </div>
         )}
-
-        {/* Homepage Shopify-Style Trust Badges */}
-        {settings.enableTrustBadges && (
-          (() => {
-            const badge1Active = settings.trustBadge1Enabled && (settings.trustBadge1Title || settings.trustBadge1Desc);
-            const badge2Active = settings.trustBadge2Enabled && (settings.trustBadge2Title || settings.trustBadge2Desc);
-            const badge3Active = settings.trustBadge3Enabled && (settings.trustBadge3Title || settings.trustBadge3Desc);
-            const badge4Active = settings.trustBadge4Enabled && (settings.trustBadge4Title || settings.trustBadge4Desc);
-            
-            const activeCount = [badge1Active, badge2Active, badge3Active, badge4Active].filter(Boolean).length;
-            if (activeCount === 0) return null;
-
-            // Responsive grid columns based on number of active badges
-            let gridColsClass = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
-            let maxContainerClass = "";
-            if (activeCount === 1) {
-              gridColsClass = "grid-cols-1";
-              maxContainerClass = "max-w-md mx-auto";
-            } else if (activeCount === 2) {
-              gridColsClass = "grid-cols-1 sm:grid-cols-2";
-              maxContainerClass = "max-w-2xl mx-auto";
-            } else if (activeCount === 3) {
-              gridColsClass = "grid-cols-1 sm:grid-cols-3 lg:grid-cols-3";
-              maxContainerClass = "max-w-5xl mx-auto";
-            }
-
-            return (
-              <div className="pt-12 pb-6 border-t border-gray-200 dark:border-gray-800 transition-colors duration-200">
-                <div className={`grid gap-6 ${gridColsClass} ${maxContainerClass}`}>
-                  {/* Card 1 */}
-                  {badge1Active && (
-                    <div className="flex items-start gap-4 p-5 rounded-2xl bg-white dark:bg-[#16162a] border border-gray-200 dark:border-gray-800 shadow-sm transition-colors duration-200">
-                      <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-xl">
-                        {renderBadgeIcon(settings.trustBadge1Icon || 'Truck')}
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">
-                          {settings.trustBadge1Title || 'Free Delivery'}
-                        </h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold leading-relaxed">
-                          {settings.trustBadge1Desc || 'On all orders above Rs. 2,000'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card 2 */}
-                  {badge2Active && (
-                    <div className="flex items-start gap-4 p-5 rounded-2xl bg-white dark:bg-[#16162a] border border-gray-200 dark:border-gray-800 shadow-sm transition-colors duration-200">
-                      <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-xl">
-                        {renderBadgeIcon(settings.trustBadge2Icon || 'Shield')}
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">
-                          {settings.trustBadge2Title || 'Secure Payments'}
-                        </h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold leading-relaxed">
-                          {settings.trustBadge2Desc || '100% protected checkout payments'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card 3 */}
-                  {badge3Active && (
-                    <div className="flex items-start gap-4 p-5 rounded-2xl bg-white dark:bg-[#16162a] border border-gray-200 dark:border-gray-800 shadow-sm transition-colors duration-200">
-                      <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-xl">
-                        {renderBadgeIcon(settings.trustBadge3Icon || 'RefreshCw')}
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">
-                          {settings.trustBadge3Title || 'Easy Exchange'}
-                        </h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold leading-relaxed">
-                          {settings.trustBadge3Desc || 'No questions asked return policy'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card 4 */}
-                  {badge4Active && (
-                    <div className="flex items-start gap-4 p-5 rounded-2xl bg-white dark:bg-[#16162a] border border-gray-200 dark:border-gray-800 shadow-sm transition-colors duration-200">
-                      <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-xl">
-                        {renderBadgeIcon(settings.trustBadge4Icon || 'Phone')}
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">
-                          {settings.trustBadge4Title || '24/7 Support'}
-                        </h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold leading-relaxed">
-                          {settings.trustBadge4Desc || 'Call/WhatsApp anytime for assistance'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })()
-        )}
+        <ProductGrid 
+          products={displayProducts} 
+          currencySymbol={settings.currencySymbol} 
+          settings={settings} 
+        />
       </div>
+    );
+  };
+
+  const renderTrustBadges = (section: HomepageSection) => {
+    const badge1Active = settings.trustBadge1Enabled && (settings.trustBadge1Title || settings.trustBadge1Desc);
+    const badge2Active = settings.trustBadge2Enabled && (settings.trustBadge2Title || settings.trustBadge2Desc);
+    const badge3Active = settings.trustBadge3Enabled && (settings.trustBadge3Title || settings.trustBadge3Desc);
+    const badge4Active = settings.trustBadge4Enabled && (settings.trustBadge4Title || settings.trustBadge4Desc);
+    
+    const activeCount = [badge1Active, badge2Active, badge3Active, badge4Active].filter(Boolean).length;
+    if (activeCount === 0) return null;
+
+    let gridColsClass = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
+    let maxContainerClass = "";
+    if (activeCount === 1) {
+      gridColsClass = "grid-cols-1";
+      maxContainerClass = "max-w-md mx-auto";
+    } else if (activeCount === 2) {
+      gridColsClass = "grid-cols-1 sm:grid-cols-2";
+      maxContainerClass = "max-w-2xl mx-auto";
+    } else if (activeCount === 3) {
+      gridColsClass = "grid-cols-1 sm:grid-cols-3 lg:grid-cols-3";
+      maxContainerClass = "max-w-5xl mx-auto";
+    }
+
+    return (
+      <div key={section.id} className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 border-t border-gray-100 dark:border-gray-800">
+        <div className={`grid gap-6 ${gridColsClass} ${maxContainerClass}`}>
+          {badge1Active && (
+            <div className="flex items-start gap-4 p-5 rounded-2xl bg-white dark:bg-[#16162a] border border-gray-200 dark:border-gray-800 shadow-sm">
+              <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-xl">
+                {renderBadgeIcon(settings.trustBadge1Icon || 'Truck')}
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">{settings.trustBadge1Title}</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold leading-relaxed">{settings.trustBadge1Desc}</p>
+              </div>
+            </div>
+          )}
+          {badge2Active && (
+            <div className="flex items-start gap-4 p-5 rounded-2xl bg-white dark:bg-[#16162a] border border-gray-200 dark:border-gray-800 shadow-sm">
+              <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-xl">
+                {renderBadgeIcon(settings.trustBadge2Icon || 'Shield')}
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">{settings.trustBadge2Title}</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold leading-relaxed">{settings.trustBadge2Desc}</p>
+              </div>
+            </div>
+          )}
+          {badge3Active && (
+            <div className="flex items-start gap-4 p-5 rounded-2xl bg-white dark:bg-[#16162a] border border-gray-250 dark:border-gray-800 shadow-sm">
+              <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-xl">
+                {renderBadgeIcon(settings.trustBadge3Icon || 'RefreshCw')}
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">{settings.trustBadge3Title}</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold leading-relaxed">{settings.trustBadge3Desc}</p>
+              </div>
+            </div>
+          )}
+          {badge4Active && (
+            <div className="flex items-start gap-4 p-5 rounded-2xl bg-white dark:bg-[#16162a] border border-gray-250 dark:border-gray-800 shadow-sm">
+              <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-xl">
+                {renderBadgeIcon(settings.trustBadge4Icon || 'Phone')}
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-extrabold text-gray-900 dark:text-white">{settings.trustBadge4Title}</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold leading-relaxed">{settings.trustBadge4Desc}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderRecentReviews = (section: HomepageSection) => {
+    if (!reviews || reviews.length === 0) return null;
+    const limit = section.settings?.limit ?? 3;
+    const displayReviews = reviews.slice(0, limit);
+
+    return (
+      <div key={section.id} className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 border-t border-gray-100 dark:border-gray-800">
+        <div className="text-center space-y-2 mb-10">
+          <h2 className="text-xl font-black uppercase tracking-wider text-gray-900 dark:text-white">
+            {section.title || 'What Our Customers Say'}
+          </h2>
+          <div className="flex items-center justify-center gap-1.5 text-amber-400 text-sm">
+            <span>★★★★★</span>
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">Happy customer reviews</span>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayReviews.map((review) => (
+            <div
+              key={review.id}
+              className="flex gap-4 p-5 rounded-2xl border border-gray-200 dark:border-gray-850 bg-white dark:bg-[#16162a] shadow-sm text-gray-900 dark:text-white"
+            >
+              <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white uppercase shadow-sm ${getAvatarColorClass(review.customerName)}`}>
+                {getInitials(review.customerName)}
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <StarRating rating={review.rating} showText={false} starSize={12} />
+                  <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500">
+                    {formatDate(review.createdAt)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-extrabold text-sm text-gray-950 dark:text-white">
+                    {review.customerName}
+                  </span>
+                  <div className="flex items-center gap-0.5 text-[9px] font-bold text-[#10b981] bg-[#10b981]/10 px-1.5 py-0.5 rounded-full">
+                    <span>✓ Verified Buyer</span>
+                  </div>
+                </div>
+                {review.comment && (
+                  <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-semibold">
+                    "{review.comment}"
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPromoBanner = (section: HomepageSection) => {
+    const bg = section.settings?.bg_color || '#e94560';
+    const text = section.settings?.text_color || '#ffffff';
+    const link = section.content_data?.link || '/shop';
+
+    return (
+      <div 
+        key={section.id} 
+        style={{ backgroundColor: bg, color: text }}
+        className="w-full py-12 px-6 text-center space-y-4"
+      >
+        <h2 className="text-2xl font-black uppercase tracking-wider">{section.title || 'Special Promotion!'}</h2>
+        {section.content_data?.text && (
+          <p className="text-sm max-w-xl mx-auto opacity-95 leading-relaxed">{section.content_data.text}</p>
+        )}
+        <div className="pt-2">
+          <Link
+            href={link}
+            className="px-6 py-2.5 bg-white text-gray-950 hover:bg-gray-100 text-xs font-bold uppercase rounded-xl transition-all shadow-md active:scale-95 inline-block cursor-pointer"
+          >
+            {section.content_data?.button_text || 'Shop Offer'}
+          </Link>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBrandsLogos = (section: HomepageSection) => {
+    const logos = section.content_data?.logos || [
+      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=120&auto=format&fit=crop&q=60',
+      'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=120&auto=format&fit=crop&q=60',
+      'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=120&auto=format&fit=crop&q=60',
+      'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=120&auto=format&fit=crop&q=60'
+    ];
+
+    return (
+      <div key={section.id} className="w-full py-8 bg-gray-50 dark:bg-white/5 border-y border-gray-150 dark:border-gray-800/80 overflow-hidden">
+        <div className="mx-auto max-w-7xl px-4 text-center mb-4">
+          <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+            {section.title || 'Our Premium Partners'}
+          </span>
+        </div>
+        <div className="flex items-center justify-center gap-12 flex-wrap opacity-65 grayscale hover:opacity-100 transition-opacity">
+          {logos.map((logoUrl: string, idx: number) => (
+            <div key={idx} className="relative w-24 h-12">
+              <Image
+                src={logoUrl}
+                alt="Brand logo Partner"
+                fill
+                sizes="96px"
+                className="object-contain animate-fade-in"
+                unoptimized={true}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderCategoryGrid = (section: HomepageSection) => {
+    const items = section.content_data?.items || [];
+    
+    // Premium placeholder categories matching reference
+    const defaultItems = [
+      { title: 'New Arrivals', link: '/shop', imageUrl: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&auto=format&fit=crop&q=80' },
+      { title: 'Trending Now', link: '/shop', imageUrl: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&auto=format&fit=crop&q=80' },
+      { title: 'Premium Collection', link: '/shop', imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80' },
+      { title: 'Accessories', link: '/shop', imageUrl: 'https://images.unsplash.com/photo-1509319117193-57bab727e09d?w=800&auto=format&fit=crop&q=80' }
+    ];
+
+    const displayItems = Array.from({ length: 4 }).map((_, idx) => {
+      const item = items[idx];
+      return (item && item.imageUrl) ? item : defaultItems[idx];
+    });
+
+    return (
+      <div key={section.id} className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        {section.title && (
+          <div className="border-b border-gray-100 dark:border-gray-800 pb-3 mb-6">
+            <h2 className="text-base font-black uppercase tracking-wider text-gray-900 dark:text-white">
+              {section.title}
+            </h2>
+          </div>
+        )}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {displayItems.map((item, idx) => (
+            <Link 
+              key={idx} 
+              href={item.link || '/shop'}
+              className="group relative block aspect-[3/4] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm cursor-pointer bg-gray-100 dark:bg-gray-900"
+            >
+              <Image
+                src={item.imageUrl}
+                alt={item.title || 'Category'}
+                fill
+                sizes="(max-width: 768px) 50vw, 25vw"
+                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                unoptimized={true}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-80 transition-opacity group-hover:opacity-90" />
+              
+              {/* Capsule label floating bottom-left */}
+              <div className="absolute bottom-4 left-4 bg-white/95 dark:bg-white text-[#1a1a2e] px-4 py-2 rounded-full text-xs font-black tracking-wide shadow-md transform transition-all group-hover:translate-x-1 duration-300">
+                {item.title || 'Explore'}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // If there is an active search query, bypass the section customization view
+  if (searchQuery) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6 min-h-screen">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+          Search Results for: <span className="text-[#e94560]">"{searchQuery}"</span> ({filteredProducts.length} items)
+        </h2>
+        <ProductGrid products={filteredProducts} currencySymbol={settings.currencySymbol} settings={settings} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-12 min-h-screen bg-gray-50 dark:bg-[#0f0f1b] text-gray-900 dark:text-gray-100 transition-colors duration-200 space-y-6">
+      {activeSections.map((section) => {
+        switch (section.section_type) {
+          case 'hero_banner':
+            return renderHeroBanner(section);
+          case 'category_list':
+            return renderCategoryList(section);
+          case 'product_grid':
+            return renderProductGrid(section);
+          case 'category_grid':
+            return renderCategoryGrid(section);
+          case 'trust_badges':
+            return renderTrustBadges(section);
+          case 'recent_reviews':
+            return renderRecentReviews(section);
+          case 'promo_banner':
+            return renderPromoBanner(section);
+          case 'brands_logos':
+            return renderBrandsLogos(section);
+          default:
+            return null;
+        }
+      })}
+
+      {/* Dynamic Social Feed on Homepage */}
+      {!searchQuery && settings.social_feeds_homepage_enabled !== false && (
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 border-t border-gray-100 dark:border-gray-800">
+          <div className="text-center space-y-2 mb-8">
+            <span className="inline-block px-3 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-500 text-xs font-bold rounded-full uppercase tracking-wider">
+              {settings.social_feeds_subtitle || '#ZAYNAHSVOGUE'}
+            </span>
+            <h2 className="text-xl font-black uppercase tracking-wider text-gray-900 dark:text-white">
+              {settings.social_feeds_title || 'Follow Us On Social Media'}
+            </h2>
+            <p className="text-xs text-gray-550 dark:text-gray-400 max-w-sm mx-auto font-semibold">
+              {settings.social_feeds_desc || 'Tag us in your post to get featured on our page'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {(parsedFeeds.length > 0 ? parsedFeeds : [
+              { id: 'v1', imageUrl: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=70', link: '#', username: 'buyer1', caption: 'Stunning piece!' },
+              { id: 'v2', imageUrl: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&q=70', link: '#', username: 'buyer2', caption: 'Obsessed with the quality.' },
+              { id: 'v3', imageUrl: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=400&q=70', link: '#', username: 'buyer3', caption: 'Super fast shipping!' },
+              { id: 'v4', imageUrl: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400&q=70', link: '#', username: 'buyer4', caption: 'Highly recommended.' }
+            ]).slice(0, 8).map((feed, idx) => (
+              <a
+                key={feed.id || idx}
+                href={feed.link || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative aspect-[9/16] bg-gray-150 dark:bg-gray-800 rounded-2xl overflow-hidden group border border-gray-100 dark:border-gray-855 block cursor-pointer"
+              >
+                <Image
+                  src={feed.imageUrl}
+                  alt={feed.caption || `Social post by @${feed.username}`}
+                  fill
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  unoptimized={true}
+                />
+                <div className="absolute inset-0 bg-black/40 flex flex-col justify-between p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="w-8 h-8 bg-white/20 backdrop-blur rounded-full flex items-center justify-center border border-white/40 shadow self-end">
+                    <Play className="w-3.5 h-3.5 text-white fill-current translate-x-0.5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-white">@{feed.username}</p>
+                    {feed.caption && <p className="text-[9px] text-gray-250 line-clamp-2 mt-0.5 leading-tight">{feed.caption}</p>}
+                  </div>
+                </div>
+                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur text-white text-[9px] font-bold px-2.5 py-1 rounded-full group-hover:opacity-0 transition-opacity">
+                  @{feed.username}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

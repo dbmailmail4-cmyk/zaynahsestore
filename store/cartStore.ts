@@ -1,15 +1,21 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CartItem, Product, ProductVariant, ProductModifier } from '@/lib/types';
+import { CartItem, Product, ProductVariant, ProductModifier, Coupon } from '@/lib/types';
 
 interface CartStore {
   items: CartItem[];
+  cartCreatedAt: string | null;
+  isDrawerOpen: boolean;
+  appliedCoupon: Coupon | null;
   addItem: (product: Product, variant?: ProductVariant, modifiers?: ProductModifier[], qty?: number) => void;
   removeItem: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
   totalItems: () => number;
   totalPrice: () => number;
+  resetCartTimer: () => void;
+  setDrawerOpen: (open: boolean) => void;
+  applyCoupon: (coupon: Coupon | null) => void;
 }
 
 const calculateItemPrice = (
@@ -26,15 +32,23 @@ export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
+      cartCreatedAt: null,
+      isDrawerOpen: false,
+      appliedCoupon: null,
 
       addItem: (product, variant, modifiers = [], qty = 1) => {
         const unitPrice = calculateItemPrice(product, variant, modifiers);
         const cartItemId = `${product.id}-${variant?.id ?? 'base'}-${modifiers.map(m => m.id).join('-')}`;
 
         set(state => {
+          const isFirstItem = state.items.length === 0;
+          const newCartCreatedAt = isFirstItem ? new Date().toISOString() : state.cartCreatedAt;
+          
           const existing = state.items.find(i => i.id === cartItemId);
           if (existing) {
             return {
+              isDrawerOpen: true,
+              cartCreatedAt: newCartCreatedAt,
               items: state.items.map(i =>
                 i.id === cartItemId
                   ? { ...i, quantity: i.quantity + qty, total: unitPrice * (i.quantity + qty) }
@@ -43,6 +57,8 @@ export const useCartStore = create<CartStore>()(
             };
           }
           return {
+            isDrawerOpen: true,
+            cartCreatedAt: newCartCreatedAt,
             items: [...state.items, {
               id: cartItemId,
               product,
@@ -57,7 +73,15 @@ export const useCartStore = create<CartStore>()(
       },
 
       removeItem: (cartItemId) =>
-        set(state => ({ items: state.items.filter(i => i.id !== cartItemId) })),
+        set(state => {
+          const newItems = state.items.filter(i => i.id !== cartItemId);
+          const hasItems = newItems.length > 0;
+          return {
+            items: newItems,
+            cartCreatedAt: hasItems ? state.cartCreatedAt : null,
+            appliedCoupon: hasItems ? state.appliedCoupon : null
+          };
+        }),
 
       updateQuantity: (cartItemId, quantity) => {
         if (quantity <= 0) {
@@ -73,9 +97,12 @@ export const useCartStore = create<CartStore>()(
         }));
       },
 
-      clearCart: () => set({ items: [] }),
+      clearCart: () => set({ items: [], cartCreatedAt: null, appliedCoupon: null }),
       totalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
       totalPrice: () => get().items.reduce((sum, i) => sum + i.total, 0),
+      resetCartTimer: () => set({ cartCreatedAt: new Date().toISOString() }),
+      setDrawerOpen: (open) => set({ isDrawerOpen: open }),
+      applyCoupon: (coupon) => set({ appliedCoupon: coupon }),
     }),
     { name: 'zaynahs-cart' }
   )

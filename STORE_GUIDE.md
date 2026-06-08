@@ -505,6 +505,45 @@ export interface Order {
 
 ---
 
+## DESIGN SYSTEM
+
+We use a complete, centralized Design Token & Font System to manage colors, typography, buttons, badges, and spacing variables consistently.
+
+### Fonts
+- **Headings & Interactive UI (Buttons, Badges, etc.)**: `Plus Jakarta Sans` (CSS variable: `font-heading`)
+- **Body & Description Text**: `Outfit` (CSS variable: `font-body`)
+
+### Color Tokens
+
+| Token | Light Value | Dark Value | Purpose |
+| :--- | :--- | :--- | :--- |
+| `primary` | `#16a34a` (Green) | `#22c55e` (Bright Green) | Main brand brandings, checkout, success links |
+| `secondary` | `#1a1a2e` (Navy) | `#0f172a` (Dark Slate) | Headers, layout backgrounds, secondary cards |
+| `accent` | `#e94560` (Red) | `#fb7185` (Rose Red) | Discount badges, sales, attention indicators |
+| `surface` | `#ffffff` | `#0f0f0f` | Main background elements |
+| `surface-2` | `#f8f8f8` | `#1a1a1a` | Secondary background wrappers |
+| `surface-3` | `#f1f1f1` | `#262626` | Tertiary dividers/borders |
+| `text` | `#1a1a1a` | `#f5f5f5` | Text contrast colors |
+| `border` | `#e5e7eb` | `#27272a` | Layout border strokes |
+| `whatsapp` | `#25D366` | `#25D366` | WhatsApp brand color |
+
+### Button Components (`components/common/Button.tsx`)
+Interactive elements support 7 color themes and 5 responsive sizes:
+- **Variants**: `primary`, `secondary`, `outline`, `accent`, `ghost`, `danger`, `whatsapp`
+- **Sizes**: `sm`, `md`, `lg`, `xl`, `full`
+- *Note: Touch targets have a strict minimum size height of `44px` enforced.*
+
+### Badge Components (`components/common/Badge.tsx`)
+Labels automatically convert to custom stylized badges:
+- **Variants**: `sale`, `new`, `hot`, `bestseller`, `limited`, `outofstock`, `featured`
+
+### How to Change Primary Theme Color
+To update the store's primary accent color:
+1. **Option A (CSS)**: Change `--primary` and `--primary-hover` variables in `app/globals.css`.
+2. **Option B (Tailwind)**: Edit `colors.primary` configuration in `tailwind.config.ts`.
+
+---
+
 ## STEP 5 — Supabase Clients
 
 ### 5.1 `lib/supabase/client.ts` (Browser)

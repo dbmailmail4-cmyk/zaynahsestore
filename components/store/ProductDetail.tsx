@@ -19,9 +19,13 @@ import {
   Package,
   Truck,
   Tag,
-  ZoomIn
-} from 'lucide-react';
+  ZoomIn,
+  Clock,
+  Play,
+  Ruler
+} from '@/components/common/Icons';
 import { StoreSettings, Product, ProductVariant, ProductModifier, PaymentMethod } from '@/lib/types';
+import { getProducts } from '@/lib/services/products';
 import PaymentBadges from '@/components/common/PaymentBadges';
 import { useCartStore } from '@/store/cartStore';
 import { formatPrice } from '@/lib/utils/whatsapp';
@@ -38,6 +42,7 @@ const isHtml = (str: string) => /<[a-z][\s\S]*>/i.test(str);
 
 export default function ProductDetail({ product, settings, averageRating }: ProductDetailProps) {
   const addItem = useCartStore(state => state.addItem);
+  const sizeGuide = product.sizeGuide;
 
   // Images setup
   const images = React.useMemo(() => {
@@ -90,7 +95,27 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
   const [copied, setCopied] = useState(false);
   const [productUrl, setProductUrl] = useState('');
 
-  // Dynamic payment methods come directly from settings.safeCheckoutMethods (single source of truth)
+  // Flash Sale Timer state
+  const [timeLeft, setTimeLeft] = useState({ hours: 4, minutes: 34, seconds: 12, expired: false });
+
+  // Bundle states
+  const [bundleProducts, setBundleProducts] = useState<Product[]>([]);
+  const [selectedBundleIds, setSelectedBundleIds] = useState<string[]>([]);
+
+  // Size Guide state
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
+
+  // Dynamic social feed items
+  const parsedFeeds = React.useMemo(() => {
+    const items = settings.social_feeds_items;
+    if (!items) return [];
+    try {
+      const arr = typeof items === 'string' ? JSON.parse(items) : items;
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }, [settings.social_feeds_items]);
 
   useEffect(() => {
     setMounted(true);
@@ -100,7 +125,72 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
     setProductUrl(window.location.href);
     const wishlist = JSON.parse(localStorage.getItem('wishlist') || '[]');
     setIsWishlisted(wishlist.includes(product.id));
-  }, [product.id, settings.minViews, settings.maxViews]);
+
+    // Fetch products for bundle recommendations
+    const loadBundleData = async () => {
+      try {
+        if (product.frequentlyBoughtTogetherIds && product.frequentlyBoughtTogetherIds.length > 0) {
+          const data = await getProducts();
+          const filtered = data.filter((p: Product) => product.frequentlyBoughtTogetherIds?.includes(p.id));
+          setBundleProducts(filtered);
+          setSelectedBundleIds(filtered.map((p: Product) => p.id));
+        } else {
+          const data = await getProducts(product.categoryId);
+          const filtered = data.filter((p: Product) => p.id !== product.id).slice(0, 2);
+          setBundleProducts(filtered);
+          setSelectedBundleIds(filtered.map((p: Product) => p.id));
+        }
+      } catch (err) {
+        console.error('Failed to load bundle products:', err);
+      }
+    };
+    loadBundleData();
+
+    // Timer countdown loop
+    const updateTimeLeft = () => {
+      if (!product.flashSaleEnabled) {
+        setTimeLeft({ hours: 0, minutes: 0, seconds: 0, expired: true });
+        return;
+      }
+      if (!product.flashSaleEndDate) {
+        // Fallback: 4 hours from now
+        setTimeLeft({ hours: 4, minutes: 34, seconds: 12, expired: false });
+        return;
+      }
+
+      const now = new Date().getTime();
+      const end = new Date(product.flashSaleEndDate).getTime();
+      const diff = end - now;
+
+      if (diff <= 0) {
+        setTimeLeft({ hours: 0, minutes: 0, seconds: 0, expired: true });
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeLeft({ hours, minutes, seconds, expired: false });
+    };
+
+    updateTimeLeft();
+    const countdownTimer = setInterval(updateTimeLeft, 1000);
+
+    return () => clearInterval(countdownTimer);
+  }, [product.id, settings.minViews, settings.maxViews, product.categoryId, product.flashSaleEnabled, product.flashSaleEndDate, product.frequentlyBoughtTogetherIds]);
+
+  const handleAddBundleToCart = () => {
+    // Add main product
+    addItem(product, selectedVariant, selectedModifiers, 1);
+    // Add selected bundle products
+    bundleProducts.forEach(p => {
+      if (selectedBundleIds.includes(p.id)) {
+        addItem(p, p.hasVariants && p.variants.length > 0 ? p.variants[0] : undefined, [], 1);
+      }
+    });
+    toast.success('Successfully added bundle items to cart!');
+  };
 
   // Price calculations
   const basePrice = selectedVariant?.price ?? product.price;
@@ -320,6 +410,35 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
               )}
             </div>
 
+            {/* Countdown timer for sales / urgency */}
+            {mounted && settings.flash_sale_enabled !== false && product.flashSaleEnabled && !timeLeft.expired && (
+              <div className="bg-rose-50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/30 rounded-2xl p-4 mt-2">
+                <p className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-450 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                  FLASH SALE — Offer Ends In:
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="flex flex-col items-center justify-center bg-white dark:bg-gray-800 text-rose-650 dark:text-rose-450 font-extrabold w-11 py-1 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+                    <span className="text-xs font-mono">{String(timeLeft.hours).padStart(2, '0')}</span>
+                    <span className="text-[7px] text-gray-400 font-normal">HRS</span>
+                  </div>
+                  <span className="font-extrabold text-rose-500">:</span>
+                  <div className="flex flex-col items-center justify-center bg-white dark:bg-gray-800 text-rose-650 dark:text-rose-450 font-extrabold w-11 py-1 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+                    <span className="text-xs font-mono">{String(timeLeft.minutes).padStart(2, '0')}</span>
+                    <span className="text-[7px] text-gray-400 font-normal">MIN</span>
+                  </div>
+                  <span className="font-extrabold text-rose-500">:</span>
+                  <div className="flex flex-col items-center justify-center bg-white dark:bg-gray-800 text-rose-650 dark:text-rose-450 font-extrabold w-11 py-1 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+                    <span className="text-xs font-mono">{String(timeLeft.seconds).padStart(2, '0')}</span>
+                    <span className="text-[7px] text-gray-400 font-normal">SEC</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Short Description */}
             {product.shortDescription && (
               <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
@@ -348,9 +467,28 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
               </div>
             )}
 
+            {/* Stock Urgency Banner */}
+            {!product.isService && settings.stock_urgency_enabled !== false && stockAvailable > 0 && stockAvailable <= 5 && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-[#e94560] bg-rose-50 dark:bg-rose-950/20 px-3 py-1.5 rounded-lg font-bold w-fit animate-pulse border border-rose-100 dark:border-rose-900/30">
+                <span>🔥 Hurry! Only {stockAvailable} left in stock!</span>
+              </div>
+            )}
+
             {/* Variant Selector */}
             {product.hasVariants && product.variants.length > 0 && (
               <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Options</span>
+                  {settings.size_guide_enabled !== false && sizeGuide && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSizeGuide(true)}
+                      className="text-xs font-bold text-[#e94560] hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      📏 Size Guide
+                    </button>
+                  )}
+                </div>
                 <VariantSelector
                   variants={product.variants}
                   selectedVariant={selectedVariant}
@@ -414,6 +552,17 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                   <Share2 className="h-4.5 w-4.5" />
                   <span>Share</span>
                 </button>
+
+                {settings.size_guide_enabled !== false && sizeGuide && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSizeGuide(true)}
+                    className="flex items-center gap-1.5 hover:text-[#e94560] transition-colors cursor-pointer"
+                  >
+                    <Ruler className="h-4.5 w-4.5" />
+                    <span>Size Guide</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -523,6 +672,88 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
                 methods={settings.safeCheckoutMethods} 
                 className="flex flex-wrap items-center justify-center gap-2"
               />
+            </div>
+          )}
+
+          {/* Frequently Bought Together (Bundle Widget) */}
+          {mounted && settings.frequently_bought_together_enabled !== false && bundleProducts.length > 0 && (
+            <div className="border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#16162a] rounded-2xl p-5 space-y-4 shadow-sm transition-colors">
+              <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Frequently Bought Together</h4>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {/* Current Product Mini-card */}
+                <div className="flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-2 rounded-xl w-full border border-gray-100 dark:border-gray-800/80">
+                  <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100">
+                    <Image
+                      src={images[0]?.url || 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=600&auto=format&fit=crop&q=60'}
+                      alt={product.name}
+                      fill
+                      sizes="48px"
+                      className="object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-gray-850 dark:text-white truncate">{product.name}</p>
+                    <p className="text-xs text-gray-500 font-semibold">{formatPrice(unitPrice, settings.currencySymbol)}</p>
+                  </div>
+                </div>
+
+                {bundleProducts.map((bp) => {
+                  const isChecked = selectedBundleIds.includes(bp.id);
+                  return (
+                    <React.Fragment key={bp.id}>
+                      <span className="text-gray-400 font-bold text-lg">+</span>
+                      <div 
+                        onClick={() => setSelectedBundleIds(prev => prev.includes(bp.id) ? prev.filter(id => id !== bp.id) : [...prev, bp.id])}
+                        className={`flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-2 rounded-xl w-full border cursor-pointer transition-all ${
+                          isChecked ? 'border-amber-500' : 'border-gray-100 dark:border-gray-850'
+                        }`}
+                      >
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-105 flex-shrink-0">
+                          {bp.images?.[0]?.url && (
+                            <Image
+                              src={bp.images[0].url}
+                              alt={bp.name}
+                              fill
+                              sizes="48px"
+                              className="object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-gray-850 dark:text-white truncate flex items-center gap-1.5">
+                            <span className={`w-3.5 h-3.5 flex items-center justify-center rounded border text-[8px] ${
+                              isChecked ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-300 bg-white dark:bg-transparent'
+                            }`}>
+                              {isChecked && '✓'}
+                            </span>
+                            {bp.name}
+                          </p>
+                          <p className="text-xs text-gray-500 font-semibold">{formatPrice(bp.price, settings.currencySymbol)}</p>
+                        </div>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              {/* Total bundle price and action button */}
+              <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 font-semibold">Total Price (Bundle):</p>
+                  <p className="text-lg font-black text-gray-900 dark:text-white">
+                    {formatPrice(
+                      unitPrice + bundleProducts.reduce((sum, bp) => sum + (selectedBundleIds.includes(bp.id) ? bp.price : 0), 0),
+                      settings.currencySymbol
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={handleAddBundleToCart}
+                  className="w-full sm:w-auto px-5 py-3 bg-[#e94560] hover:bg-[#d43852] text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  Add All to Cart
+                </button>
+              </div>
             </div>
           )}
 
@@ -789,6 +1020,125 @@ export default function ProductDetail({ product, settings, averageRating }: Prod
           )}
         </div>
       )}
+
+      {/* Sizing Guide Modal */}
+      {showSizeGuide && settings.size_guide_enabled !== false && sizeGuide && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overscroll-contain">
+          <div className="relative w-full max-w-lg bg-white dark:bg-[#16162a] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 shadow-2xl text-gray-900 dark:text-white max-h-[90vh] overflow-y-auto overscroll-contain">
+            <button
+              onClick={() => setShowSizeGuide(false)}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-wider mb-4">
+              📏 {sizeGuide.name}
+            </h3>
+            
+            {sizeGuide.imageUrl && (
+              <div className="relative w-full h-48 sm:h-64 rounded-2xl overflow-hidden bg-gray-50 dark:bg-white/5 mb-6 border border-gray-100 dark:border-gray-800 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={sizeGuide.imageUrl}
+                  alt={`${sizeGuide.name} visual reference`}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            )}
+
+            {sizeGuide.chart_data && sizeGuide.chart_data.length > 0 && (
+              <div className="border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden bg-white dark:bg-[#0f0f1b]/50">
+                <div className="overflow-x-auto scrollbar-thin">
+                  <table className="w-full text-xs text-left border-collapse min-w-[320px]">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-gray-800">
+                        {Object.keys(sizeGuide.chart_data[0]).map((colName) => (
+                          <th key={colName} className="p-3 font-extrabold uppercase text-gray-500 dark:text-gray-400">
+                            {colName}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {sizeGuide.chart_data.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50/20">
+                          {Object.keys(sizeGuide.chart_data[0]).map((colName) => (
+                            <td key={colName} className="p-3 font-semibold text-gray-700 dark:text-gray-300">
+                              {row[colName] || '-'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <p className="mt-4 text-[10px] text-gray-400 text-center leading-normal">
+              Sizes may vary slightly. For questions or custom sizing, contact support via WhatsApp.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Instagram/TikTok Social Feed Embeds (Premium Mock) */}
+      {settings.social_feeds_product_enabled !== false && (
+        <div className="border-t border-gray-200 dark:border-gray-800 mt-12 pt-8">
+          <div className="text-center space-y-2 mb-6">
+            <span className="inline-block px-3 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-500 text-xs font-bold rounded-full uppercase tracking-wider">
+              {settings.social_feeds_subtitle || '#ZAYNAHSVOGUE'}
+            </span>
+            <h3 className="text-lg font-black uppercase text-gray-900 dark:text-white tracking-wider">
+              {settings.social_feeds_title || 'Loved On Social Media'}
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+              {settings.social_feeds_desc || 'See how our premium buyers wear and style their favorites. Tag us to get featured!'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {(parsedFeeds.length > 0 ? parsedFeeds : [
+              { id: 'v1', imageUrl: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=70', link: '#', username: 'buyer1', caption: 'Stunning piece!' },
+              { id: 'v2', imageUrl: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&q=70', link: '#', username: 'buyer2', caption: 'Obsessed with the quality.' },
+              { id: 'v3', imageUrl: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=400&q=70', link: '#', username: 'buyer3', caption: 'Super fast shipping!' },
+              { id: 'v4', imageUrl: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400&q=70', link: '#', username: 'buyer4', caption: 'Highly recommended.' }
+            ]).slice(0, 8).map((feed, idx) => (
+              <a
+                key={feed.id || idx}
+                href={feed.link || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative aspect-[9/16] bg-gray-150 dark:bg-gray-800 rounded-2xl overflow-hidden group border border-gray-100 dark:border-gray-855 block cursor-pointer"
+              >
+                <Image
+                  src={feed.imageUrl}
+                  alt={feed.caption || `Social post by @${feed.username}`}
+                  fill
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  unoptimized={true}
+                />
+                {/* Play/Eye overlay on hover */}
+                <div className="absolute inset-0 bg-black/40 flex flex-col justify-between p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="w-8 h-8 bg-white/20 backdrop-blur rounded-full flex items-center justify-center border border-white/40 shadow self-end">
+                    <Play className="w-3.5 h-3.5 text-white fill-current translate-x-0.5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-white">@{feed.username}</p>
+                    {feed.caption && <p className="text-[9px] text-gray-250 line-clamp-2 mt-0.5 leading-tight">{feed.caption}</p>}
+                  </div>
+                </div>
+                {/* Default username tag visible when not hovered */}
+                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur text-white text-[9px] font-bold px-2.5 py-1 rounded-full group-hover:opacity-0 transition-opacity">
+                  @{feed.username}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

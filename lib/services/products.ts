@@ -87,6 +87,11 @@ interface DBProductRow {
   custom_badge_id?: string | null;
   badge_enabled?: boolean | null;
   badges?: any | null;
+  size_guide_id?: string | null;
+  size_guides?: any | null;
+  frequently_bought_together_ids?: string[] | null;
+  flash_sale_enabled?: boolean | null;
+  flash_sale_end_date?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -168,6 +173,16 @@ const mapProduct = (row: DBProductRow): Product => {
       bgColor: row.badges.bg_color,
       textColor: row.badges.text_color
     } : undefined,
+    sizeGuideId: row.size_guide_id || undefined,
+    sizeGuide: row.size_guides ? {
+      id: row.size_guides.id,
+      name: row.size_guides.name,
+      chart_data: Array.isArray(row.size_guides.chart_data) ? row.size_guides.chart_data : [],
+      imageUrl: row.size_guides.image_url || undefined
+    } : undefined,
+    frequentlyBoughtTogetherIds: row.frequently_bought_together_ids || [],
+    flashSaleEnabled: row.flash_sale_enabled ?? false,
+    flashSaleEndDate: row.flash_sale_end_date || undefined,
     tags: row.tags ?? [],
     images,
     variants,
@@ -182,7 +197,7 @@ const mapProduct = (row: DBProductRow): Product => {
 const fetchProducts = async (categoryId?: string): Promise<Product[]> => {
   let query = staticSupabase
     .from('products')
-    .select('*, product_images(*), product_variants(*), product_modifiers(*), categories(*), badges(*)')
+    .select('*, product_images(*), product_variants(*), product_modifiers(*), categories(*), badges(*), size_guides(*)')
     .eq('active', true);
 
   if (categoryId) {
@@ -213,7 +228,7 @@ export const getProducts = async (categoryId?: string) => {
 const fetchProductBySlug = async (slug: string): Promise<Product | null> => {
   const { data, error } = await staticSupabase
     .from('products')
-    .select('*, product_images(*), product_variants(*), product_modifiers(*), categories(*), badges(*)')
+    .select('*, product_images(*), product_variants(*), product_modifiers(*), categories(*), badges(*), size_guides(*)')
     .eq('slug', slug)
     .eq('active', true)
     .maybeSingle();
@@ -240,7 +255,7 @@ export const getProductById = async (id: string): Promise<Product | null> => {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('products')
-      .select('*, product_images(*), product_variants(*), product_modifiers(*), categories(*), badges(*)')
+      .select('*, product_images(*), product_variants(*), product_modifiers(*), categories(*), badges(*), size_guides(*)')
       .eq('id', id)
       .maybeSingle();
 
@@ -257,7 +272,7 @@ export const getAllProductsAdmin = async (): Promise<Product[]> => {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('products')
-      .select('*, product_images(*), product_variants(*), product_modifiers(*), categories(*), badges(*)')
+      .select('*, product_images(*), product_variants(*), product_modifiers(*), categories(*), badges(*), size_guides(*)')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -299,6 +314,10 @@ export const createProduct = async (
         show_swatches_on_archive: product.showSwatchesOnArchive,
         custom_badge_id: product.customBadgeId || null,
         badge_enabled: product.badgeEnabled ?? true,
+        size_guide_id: product.sizeGuideId || null,
+        frequently_bought_together_ids: product.frequentlyBoughtTogetherIds || [],
+        flash_sale_enabled: product.flashSaleEnabled || false,
+        flash_sale_end_date: product.flashSaleEndDate || null,
         tags: product.tags,
         rating: product.rating,
         reviews_count: product.reviewsCount
@@ -401,6 +420,10 @@ export const updateProduct = async (
     if (product.showSwatchesOnArchive !== undefined) updatePayload.show_swatches_on_archive = product.showSwatchesOnArchive;
     if (product.customBadgeId !== undefined) updatePayload.custom_badge_id = product.customBadgeId || null;
     if (product.badgeEnabled !== undefined) updatePayload.badge_enabled = product.badgeEnabled;
+    if (product.sizeGuideId !== undefined) updatePayload.size_guide_id = product.sizeGuideId || null;
+    if (product.frequentlyBoughtTogetherIds !== undefined) updatePayload.frequently_bought_together_ids = product.frequentlyBoughtTogetherIds;
+    if (product.flashSaleEnabled !== undefined) updatePayload.flash_sale_enabled = product.flashSaleEnabled;
+    if (product.flashSaleEndDate !== undefined) updatePayload.flash_sale_end_date = product.flashSaleEndDate || null;
     if (product.tags !== undefined) updatePayload.tags = product.tags;
     if (product.rating !== undefined) updatePayload.rating = product.rating;
     if (product.reviewsCount !== undefined) updatePayload.reviews_count = product.reviewsCount;

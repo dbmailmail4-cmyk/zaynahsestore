@@ -14,6 +14,7 @@ import { formatPrice, generateWhatsAppMessage, buildWhatsAppURL } from '@/lib/ut
 import { createOrder } from '@/lib/services/orders';
 import { toast } from 'sonner';
 import PaymentBadges from '@/components/common/PaymentBadges';
+import { validateCouponCode } from '@/lib/services/coupons';
 
 
 
@@ -30,6 +31,8 @@ export default function CartContainer({ settings }: CartContainerProps) {
   const removeItem = useCartStore(state => state.removeItem);
   const totalPrice = useCartStore(state => state.totalPrice());
   const clearCart = useCartStore(state => state.clearCart);
+  const appliedCoupon = useCartStore(state => state.appliedCoupon);
+  const applyCoupon = useCartStore(state => state.applyCoupon);
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,8 +60,15 @@ export default function CartContainer({ settings }: CartContainerProps) {
 
   // Discount
   const [discountCode, setDiscountCode] = useState('');
-  const [appliedDiscount, setAppliedDiscount] = useState<{ code: string; percent: number } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Auto-invalidate coupon if subtotal falls below minimum amount
+  useEffect(() => {
+    if (appliedCoupon && appliedCoupon.minCartAmount && totalPrice < appliedCoupon.minCartAmount) {
+      applyCoupon(null);
+      toast.error(`Coupon ${appliedCoupon.code} removed (Subtotal fell below Rs. ${appliedCoupon.minCartAmount})`);
+    }
+  }, [totalPrice, appliedCoupon, applyCoupon]);
 
   // Dynamic shipping
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
@@ -112,20 +122,56 @@ export default function CartContainer({ settings }: CartContainerProps) {
 
   // ── Price math ──────────────────────────────────────────────────────────────
   const selectedShipping = shippingMethods.find(m => m.id === selectedShippingId);
-  const shippingCost = selectedShipping?.cost ?? 200;
+  const baseShippingCost = selectedShipping?.cost ?? 200;
   const subtotal = totalPrice;
-  const discountAmount = appliedDiscount ? Math.round((subtotal * appliedDiscount.percent) / 100) : 0;
-  const finalTotal = subtotal - discountAmount + shippingCost;
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
 
-  const handleApplyDiscount = (e: React.MouseEvent) => {
+  // Free shipping check
+  const freeShippingThreshold = settings.free_shipping_threshold ?? 2000;
+  const qualifiesForFreeShipping = settings.free_shipping_bar_enabled !== false && subtotal >= freeShippingThreshold;
+  const shippingCost = qualifiesForFreeShipping ? 0 : baseShippingCost;
+
+  // Volume discount check
+  const volumeDiscountThreshold = settings.volume_discount_threshold ?? 3;
+  const volumeDiscountPercentage = settings.volume_discount_percentage ?? 10;
+  const qualifiesForVolumeDiscount = settings.volume_discounts_enabled !== false && itemCount >= volumeDiscountThreshold;
+  const volumeDiscountAmount = qualifiesForVolumeDiscount
+    ? Math.round((subtotal * volumeDiscountPercentage) / 100)
+    : 0;
+  
+  // Coupon discount check
+  const couponDiscountAmount = (() => {
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.discountType === 'percentage') {
+      return Math.round((subtotal * appliedCoupon.value) / 100);
+    } else {
+      return Math.min(appliedCoupon.value, subtotal);
+    }
+  })();
+
+  const discountAmount = volumeDiscountAmount + couponDiscountAmount;
+  
+  const finalTotal = Math.max(0, subtotal - discountAmount + shippingCost);
+
+  const handleApplyDiscount = async (e: React.MouseEvent) => {
     e.preventDefault();
     const clean = discountCode.trim().toUpperCase();
-    if (clean === 'ZAYNAH10') {
-      setAppliedDiscount({ code: 'ZAYNAH10', percent: 10 });
-      toast.success('10% discount applied!');
-    } else if (clean) {
-      toast.error('Invalid discount code');
+    if (!clean) return;
+
+    setLoading(true);
+    try {
+      const coupon = await validateCouponCode(clean, subtotal);
+      if (coupon) {
+        applyCoupon(coupon);
+        setDiscountCode('');
+        toast.success(`Coupon "${coupon.code}" applied successfully!`);
+      } else {
+        toast.error('Invalid or expired coupon code');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to validate coupon code');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -147,7 +193,8 @@ export default function CartContainer({ settings }: CartContainerProps) {
         `Phone: ${phone.trim()}`,
         emailOrPhone.trim() ? `Contact: ${emailOrPhone.trim()}` : '',
         notes.trim() ? `Notes: ${notes.trim()}` : '',
-        appliedDiscount ? `Discount: ${appliedDiscount.code} (-${appliedDiscount.percent}%)` : ''
+        volumeDiscountAmount > 0 ? `Volume Discount: -${formatPrice(volumeDiscountAmount, settings.currencySymbol)}` : '',
+        couponDiscountAmount > 0 ? `Coupon Discount (${appliedCoupon?.code}): -${formatPrice(couponDiscountAmount, settings.currencySymbol)}` : ''
       ].filter(Boolean).join('\n');
 
       const order = await createOrder({
@@ -178,7 +225,8 @@ export default function CartContainer({ settings }: CartContainerProps) {
         postalCode.trim() ? `• Postal: ${postalCode.trim()}` : '',
         emailOrPhone.trim() ? `• Contact: ${emailOrPhone.trim()}` : '',
         notes.trim() ? `• Notes: ${notes.trim()}` : '',
-        appliedDiscount ? `• Discount: ${appliedDiscount.code} (-${formatPrice(discountAmount, settings.currencySymbol)})` : '',
+        volumeDiscountAmount > 0 ? `• Volume Discount: -${formatPrice(volumeDiscountAmount, settings.currencySymbol)}` : '',
+        couponDiscountAmount > 0 ? `• Coupon Discount (${appliedCoupon?.code}): -${formatPrice(couponDiscountAmount, settings.currencySymbol)}` : '',
         `• Shipping: ${selectedShipping?.name ?? 'Standard'} (${formatPrice(shippingCost, settings.currencySymbol)})`,
         `*Grand Total: ${formatPrice(finalTotal, settings.currencySymbol)}*`,
         '',
@@ -333,45 +381,75 @@ export default function CartContainer({ settings }: CartContainerProps) {
       )}
 
       {/* Discount input */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Discount code"
-            value={discountCode}
-            onChange={e => setDiscountCode(e.target.value)}
-            className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#16162a] text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 focus:border-[#e94560] focus:outline-none transition-all"
-          />
+      {settings.coupon_codes_enabled !== false && (
+        <div className="flex gap-2">
+          {appliedCoupon ? (
+            <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/20 px-3 py-2.5 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-450 w-full">
+              <span className="flex items-center gap-1.5 truncate">
+                <Tag className="w-3.5 h-3.5 shrink-0" />
+                Promo: <strong className="font-extrabold">{appliedCoupon.code}</strong> ({appliedCoupon.discountType === 'percentage' ? `${appliedCoupon.value}%` : `${formatPrice(appliedCoupon.value, settings.currencySymbol)} Off`})
+              </span>
+              <button
+                type="button"
+                onClick={() => applyCoupon(null)}
+                className="text-red-500 hover:text-red-650 dark:hover:text-red-400 font-extrabold text-[10px] uppercase px-2 py-1 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-pointer shrink-0 ml-2"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2 w-full">
+              <div className="relative flex-1">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Discount code"
+                  value={discountCode}
+                  onChange={e => setDiscountCode(e.target.value.toUpperCase())}
+                  className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#16162a] text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 focus:border-[#e94560] focus:outline-none transition-all"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleApplyDiscount}
+                disabled={!discountCode.trim()}
+                className="px-4 py-2.5 rounded-xl bg-[#1a1a2e] hover:bg-[#e94560] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+              >
+                Apply
+              </button>
+            </div>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={handleApplyDiscount}
-          disabled={!discountCode.trim()}
-          className="px-4 py-2.5 rounded-xl bg-[#1a1a2e] hover:bg-[#e94560] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap"
-        >
-          Apply
-        </button>
-      </div>
+      )}
 
       {/* Price breakdown */}
-      <div className="space-y-2.5 text-sm">
-        <div className="flex justify-between text-gray-500 dark:text-gray-400 font-semibold">
+      <div className="space-y-2.5 text-sm font-semibold">
+        <div className="flex justify-between text-gray-500 dark:text-gray-400">
           <span>Subtotal · {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
           <span className="text-gray-900 dark:text-white font-bold">{formatPrice(subtotal, settings.currencySymbol)}</span>
         </div>
 
-        {appliedDiscount && (
+        {volumeDiscountAmount > 0 && (
           <div className="flex justify-between text-emerald-500 font-bold">
             <span className="flex items-center gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {appliedDiscount.code} ({appliedDiscount.percent}% off)
+              Volume Discount ({volumeDiscountPercentage}% off)
             </span>
-            <span>−{formatPrice(discountAmount, settings.currencySymbol)}</span>
+            <span>−{formatPrice(volumeDiscountAmount, settings.currencySymbol)}</span>
           </div>
         )}
 
-        <div className="flex justify-between text-gray-500 dark:text-gray-400 font-semibold">
+        {couponDiscountAmount > 0 && (
+          <div className="flex justify-between text-emerald-500 font-bold">
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Promo Discount ({appliedCoupon?.code})
+            </span>
+            <span>−{formatPrice(couponDiscountAmount, settings.currencySymbol)}</span>
+          </div>
+        )}
+
+        <div className="flex justify-between text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1">
             <Truck className="h-3.5 w-3.5" />
             Shipping
@@ -383,7 +461,7 @@ export default function CartContainer({ settings }: CartContainerProps) {
           <span>Total</span>
           <div className="flex items-baseline gap-1">
             <span className="text-xs font-semibold text-gray-400">{settings.currency || 'PKR'}</span>
-            <span className="text-xl">{formatPrice(finalTotal, settings.currencySymbol)}</span>
+            <span className="text-xl text-[#e94560] font-black">{formatPrice(finalTotal, settings.currencySymbol)}</span>
           </div>
         </div>
       </div>

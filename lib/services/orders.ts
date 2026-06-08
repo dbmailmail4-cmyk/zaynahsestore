@@ -28,6 +28,7 @@ const mapOrder = (row: OrderRow): Order => ({
   subtotal: row.subtotal ? parseFloat(row.subtotal.toString()) : 0,
   total: row.total ? parseFloat(row.total.toString()) : 0,
   status: row.status as Order['status'],
+  notes: row.notes || undefined,
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });

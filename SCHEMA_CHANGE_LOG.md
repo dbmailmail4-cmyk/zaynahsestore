@@ -12,6 +12,48 @@
 1. What changed and why
 ```
 
+### [2026-06-08] v1.5.0 — Dynamic Product Size Guides Preset Creator & Interactive Sizing Table Builder
+**Files Updated:** supabase/migrations/20260608010000_add_size_guides_table.sql, supabase/schema/SUPER_MASTER_SCHEMA.sql, lib/types.ts, lib/services/sizeGuides.ts, lib/services/products.ts, lib/services/storage.ts, components/admin/ProductForm.tsx, components/admin/SettingsForm.tsx, components/store/ProductDetail.tsx, components/common/Icons.tsx, SCHEMA_CHANGE_LOG.md
+**Changes:**
+1. Database Schema additions: Created `size_guides` table storing size charts (`chart_data` JSONB) and associated measurement images. Added `size_guide_id` relationship column to `products` table.
+2. Settings Presets Manager: Built a custom Size Guides admin tab featuring a list of presets (with edit/delete), custom chart image uploader, and dynamic sizing table builder where columns are custom defined and cell values are filled in an interactive grid.
+3. Product Form selector: Updated product creator form to fetch size guides and support linking presets to individual products.
+4. Storefront triggers & modal: Added `Ruler` icon to the action links row next to "Share" and "Ask a question" on the customer storefront. Overhauled the Size Guide modal to dynamically render column headers, table rows, and the reference diagram if uploaded.
+5. Fully resolved strict type constraints and verified clean compilation checks with zero errors.
+
+---
+
+### [2026-06-08] v1.4.0 — Advanced Ticker Customizer, Exit Intent Image Uploader & Cookie Consent Customization
+**Files Updated:** supabase/migrations/20260608009000_add_recent_buyers_advanced_settings.sql, supabase/schema/SUPER_MASTER_SCHEMA.sql, lib/types.ts, lib/services/settings.ts, lib/services/orders.ts, components/admin/SettingsForm.tsx, components/store/PremiumFeaturesProvider.tsx, SCHEMA_CHANGE_LOG.md
+**Changes:**
+1. Database migration added advanced columns: `recent_buyers_names`, `recent_buyers_cities`, `recent_buyers_source`, `recent_buyers_product_pool`, `recent_buyers_custom_products`, `recent_buyers_initial_delay`, `recent_buyers_interval`, `recent_buyers_display_duration`, `exit_intent_image_url`, `exit_intent_delay_mobile`, `cookie_consent_text`, `cookie_consent_button_text` to the `store_settings` table.
+2. Modified SettingsForm to render fields for Cities list, Names list, simulated/real buyer source radio toggle, product notification pool select, scrollable custom products checklist, delay/interval sliders, cookie consent texts, and exit intent banner image uploader (with dual manual URL pasting and local optimized uploads).
+3. Verified full strict TypeScript compilation successfully.
+
+---
+
+### [2026-06-08] v1.3.0 — Storefront Settings respect settings toggles for 12 Premium Features
+**Files Updated:** components/admin/SettingsForm.tsx, components/store/PremiumFeaturesProvider.tsx, components/store/CartDrawer.tsx, components/store/CartContainer.tsx, components/store/ProductDetail.tsx, SCHEMA_CHANGE_LOG.md
+**Changes:**
+1. Rendered checkbox toggles in the Settings Form's Premium Features tab to fully control showing/hiding individual features: Cookie Consent, Recent Buyers, Free Shipping Progress Bar, Volume Discounts, Frequently Bought Together, Stock Urgency, Flash Sale, Social Feeds, Cart Expiry, and Size Guide.
+2. Updated `PremiumFeaturesProvider.tsx`, `CartDrawer.tsx`, `CartContainer.tsx`, and `ProductDetail.tsx` to respect these toggles before executing calculations, ticking timers, or rendering widgets.
+3. Verified strict compile safety using `npx tsc --noEmit` which completed with zero compilation errors.
+
+---
+
+### [2026-06-07] v1.2.0 — Design Token System + Font System
+**Files Updated:** tailwind.config.ts, app/globals.css, app/layout.tsx, components/common/Button.tsx, components/common/Badge.tsx, components/common/Typography.tsx, STORE_GUIDE.md, SCHEMA_CHANGE_LOG.md
+**Changes:**
+1. Plus Jakarta Sans (headings) + Outfit (body) via next/font — zero layout shift
+2. Complete color token system: primary green, secondary navy, accent red
+3. Dark mode CSS variables in globals.css
+4. Button component with 7 variants + 5 sizes, min 44px touch targets
+5. Badge component with 7 variants
+6. Typography component with consistent scale
+7. 1 line change in tailwind.config.ts changes entire site color
+
+---
+
 ### [2026-06-08] v2.3.0 — Trust Badges Selectors, Social Media Integrations & Shopify-Style Footer
 **Files Updated:** supabase/migrations/20260608003000_add_badges_socials_and_footer_editable_fields.sql, supabase/migrations/20260608004000_add_footer_bottom_text_to_settings.sql, supabase/schema/SUPER_MASTER_SCHEMA.sql, lib/types.ts, lib/services/settings.ts, components/admin/SettingsForm.tsx, components/store/StoreFront.tsx, components/common/Footer.tsx, SCHEMA_CHANGE_LOG.md
 **Changes:**
@@ -459,7 +501,6 @@ Changes:
   - `components/store/ProductDetail.tsx` (modified)
   - `components/store/ShopPage.tsx` (modified)
   - `app/layout.tsx` (modified)
-  - `gemini.md` (modified)
 - **What changed:**
   1. **Sticky Header Settings** — Added `header_sticky` column to `store_settings` and corresponding Admin settings form toggle. Updated services, mappers, and types. Modified `Navbar.tsx` to dynamically toggle between sticky and relative header based on the user preference.
   2. **Mobile Touch Hover** — Implemented touch event simulation on storefront product cards to trigger image hover (swapping to secondary image or zooming) cleanly on mobile screens.
@@ -467,4 +508,53 @@ Changes:
   4. **Description Tabs Collapse** — Implemented an expand/collapse (Read More/Read Less) toggle on product detail description contents with bottom gradients.
   5. **Drawer Theme Switcher** — Moved the light/dark mode switch into the mobile drawer header next to the close button and configured `ThemeProvider` to default to `light` theme.
   6. **Shop Page Filter Scroller** — Configured the shop page mobile filter sheet and categories list layout to support touch-first, top-down scrolling with `overscroll-contain touch-pan-y` and expanded nested scrollbars to prevent gesture hijacking.
+
+### [2026-06-08 06:50] - v1.3.0 — Premium Storefront Feature Enable/Disable Toggles
+- **Files Updated / Created:**
+  - `supabase/migrations/20260608007000_premium_theme_and_customizer.sql` (created)
+  - `supabase/migrations/20260608008000_add_premium_features_toggles.sql` (created)
+  - `supabase/schema/SUPER_MASTER_SCHEMA.sql` (modified)
+  - `lib/types.ts` (modified)
+  - `lib/services/settings.ts` (modified)
+  - `components/admin/SettingsForm.tsx` (modified)
+- **What changed:**
+  1. **Feature toggles** — Added database configuration toggle flags in `store_settings` to enable/disable specific marketing widgets (Recent Buyers ticker, Exit Intent popup, Cookie banner, Spin-to-Win wheel, Progress Bar, Volume Discounts, FBT bundles, Stock Urgency, Flash Sale count, Social feeds, Cart expiration, Size guides).
+
+### [2026-06-08 07:15] - v1.4.0 — Ticker, Exit Intent & Cookie Banner Customization
+- **Files Updated / Created:**
+  - `supabase/migrations/20260608009000_add_recent_buyers_advanced_settings.sql` (created)
+  - `supabase/schema/SUPER_MASTER_SCHEMA.sql` (modified)
+  - `lib/types.ts` (modified)
+  - `lib/services/settings.ts` (modified)
+  - `components/admin/SettingsForm.tsx` (modified)
+- **What changed:**
+  1. **Dynamic Ticker Controls** — Enabled admin inputs for simulated buyer names/cities or real order tracking from the database, custom product pools (featured, sale, custom checklist selection), and timing delay sliders.
+  2. **Exit Intent Popup** — Configured dynamic coupon codes, popup delay slider, and HEIC-native compression image uploader.
+  3. **Cookie Consent custom styling** — Integrated custom consent button and description texts.
+
+### [2026-06-08 07:30] - v1.5.0 — Dynamic Product Size Guides Preset System
+- **Files Updated / Created:**
+  - `supabase/migrations/20260608010000_add_size_guides_table.sql` (created)
+  - `supabase/schema/SUPER_MASTER_SCHEMA.sql` (modified)
+  - `lib/services/sizeGuides.ts` (created)
+  - `components/admin/SettingsForm.tsx` (modified)
+  - `components/store/ProductDetail.tsx` (modified)
+- **What changed:**
+  1. **Sizing Presets Database Table** — Created `size_guides` table storing reusable size charts in JSON columns along with measurement diagrams.
+  2. **Interactive Size Table Editor** — Added spreadsheet-style sizing table builder in Admin Settings supporting custom comma-separated columns, row appends, and optimized WebP measurement diagram file uploads.
+  3. **Storefront Detail Modal** — Integrated sizing chart modal overlay next to product share icons.
+
+### [2026-06-08 07:45] - v1.6.0 — Coupons Management & E-Commerce Campaign Visuals
+- **Files Updated / Created:**
+  - `supabase/migrations/20260608020000_coupons_fbt_flash_social_settings.sql` (created)
+  - `supabase/schema/SUPER_MASTER_SCHEMA.sql` (modified)
+  - `lib/services/coupons.ts` (created)
+  - `components/admin/SettingsForm.tsx` (modified)
+  - `components/store/CartDrawer.tsx` (modified)
+  - `components/store/CartContainer.tsx` (modified)
+- **What changed:**
+  1. **Coupons Database** — Created `coupons` table supporting percentage/fixed discounts, minimum subtotal checkouts validation, and status flags.
+  2. **Admin Coupons Manager** — Created coupons creator with validation states in Settings.
+  3. **Visual Customization** — Programmed Admin controls for Frequently Bought Together products, customizable Instagram/social feeds ribbon, and per-product Countdown sales clocks.
+
 

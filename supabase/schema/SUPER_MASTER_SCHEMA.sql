@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS products (
   sort_order INTEGER DEFAULT 0,
   custom_badge_id UUID REFERENCES badges(id) ON DELETE SET NULL,
   badge_enabled BOOLEAN DEFAULT true,
+  size_guide_id UUID REFERENCES size_guides(id) ON DELETE SET NULL,
+  frequently_bought_together_ids UUID[] DEFAULT '{}'::uuid[],
+  flash_sale_enabled BOOLEAN DEFAULT false,
+  flash_sale_end_date TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -271,6 +275,52 @@ CREATE TABLE IF NOT EXISTS store_settings (
   floating_snapchat_enabled BOOLEAN DEFAULT false,
   floating_twitter_enabled BOOLEAN DEFAULT false,
 
+  -- Premium e-commerce settings
+  exit_intent_enabled BOOLEAN DEFAULT false,
+  exit_intent_title TEXT DEFAULT 'Wait! Get a Special Discount',
+  exit_intent_text TEXT DEFAULT 'Submit your WhatsApp number to unlock a secret coupon code.',
+  exit_intent_coupon TEXT DEFAULT 'WELCOME10',
+  spin_wheel_enabled BOOLEAN DEFAULT false,
+  spin_wheel_segments TEXT[] DEFAULT '{"Try Again", "5% Off", "Free Shipping", "10% Off", "Free Delivery", "WELCOME15"}',
+  cart_timer_minutes INTEGER DEFAULT 10,
+  free_shipping_threshold NUMERIC(10,2) DEFAULT 2000.00,
+  volume_discount_threshold INTEGER DEFAULT 3,
+  volume_discount_percentage NUMERIC(5,2) DEFAULT 10.00,
+  recent_buyers JSONB DEFAULT '[{"name": "Ahmad", "city": "Lahore"}, {"name": "Fatima", "city": "Karachi"}, {"name": "Zainab", "city": "Islamabad"}, {"name": "Hamza", "city": "Rawalpindi"}, {"name": "Ayesha", "city": "Faisalabad"}, {"name": "Bilal", "city": "Multan"}]',
+  recently_viewed_limit INTEGER DEFAULT 4,
+  recent_buyers_enabled BOOLEAN DEFAULT true,
+  cookie_consent_enabled BOOLEAN DEFAULT true,
+  free_shipping_bar_enabled BOOLEAN DEFAULT true,
+  volume_discounts_enabled BOOLEAN DEFAULT true,
+  frequently_bought_together_enabled BOOLEAN DEFAULT true,
+  stock_urgency_enabled BOOLEAN DEFAULT true,
+  flash_sale_enabled BOOLEAN DEFAULT true,
+  social_feeds_enabled BOOLEAN DEFAULT true,
+  cart_timer_enabled BOOLEAN DEFAULT true,
+  size_guide_enabled BOOLEAN DEFAULT true,
+
+  recent_buyers_names TEXT DEFAULT 'Ahmad, Fatima, Zainab, Hamza, Ayesha, Bilal, Sana, Ali, Usman, Maryam',
+  recent_buyers_cities TEXT DEFAULT 'Lahore, Karachi, Islamabad, Rawalpindi, Faisalabad, Multan, Peshawar, Quetta, Sialkot, Gujranwala',
+  recent_buyers_source TEXT DEFAULT 'simulated',
+  recent_buyers_product_pool TEXT DEFAULT 'any',
+  recent_buyers_custom_products JSONB DEFAULT '[]',
+  recent_buyers_initial_delay INTEGER DEFAULT 15,
+  recent_buyers_interval INTEGER DEFAULT 35,
+  recent_buyers_display_duration INTEGER DEFAULT 6,
+  exit_intent_image_url TEXT DEFAULT '',
+  exit_intent_delay_mobile INTEGER DEFAULT 25,
+  cookie_consent_text TEXT DEFAULT 'We use cookies to optimize your experience, analyze traffic, and support checkout flows. By continuing, you agree to our privacy policy.',
+  cookie_consent_button_text TEXT DEFAULT 'Accept All',
+  
+  social_feeds_homepage_enabled BOOLEAN DEFAULT true,
+  social_feeds_product_enabled BOOLEAN DEFAULT true,
+  social_feeds_title TEXT DEFAULT 'Follow Us On Instagram',
+  social_feeds_subtitle TEXT DEFAULT '@Zaynahs.pk',
+  social_feeds_desc TEXT DEFAULT 'Tag us in your post to get featured on our page',
+  social_feeds_items JSONB DEFAULT '[]'::jsonb,
+  cart_timer_message TEXT DEFAULT 'Items in your cart are reserved for {timer} minutes.',
+  coupon_codes_enabled BOOLEAN DEFAULT true,
+
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -453,6 +503,47 @@ CREATE POLICY "Public read payment_methods" ON payment_methods FOR SELECT USING 
 CREATE POLICY "Admin all payment_methods" ON payment_methods FOR ALL USING (auth.role() = 'authenticated');
 
 -- ============================================================
+-- SIZE GUIDES
+-- ============================================================
+CREATE TABLE IF NOT EXISTS size_guides (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  chart_data JSONB NOT NULL DEFAULT '[]',
+  image_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE size_guides ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read size guides" ON size_guides FOR SELECT USING (true);
+CREATE POLICY "Admin all size guides" ON size_guides FOR ALL USING (auth.role() = 'authenticated');
+
+-- ============================================================
+-- COUPONS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS coupons (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code TEXT NOT NULL UNIQUE,
+  discount_type TEXT NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+  value NUMERIC(10,2) NOT NULL DEFAULT 0,
+  min_cart_amount NUMERIC(10,2) DEFAULT 0,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE coupons ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read coupons" ON coupons FOR SELECT USING (active = true);
+CREATE POLICY "Admin all coupons" ON coupons FOR ALL USING (auth.role() = 'authenticated');
+
+DROP TRIGGER IF EXISTS update_coupons_updated_at ON coupons;
+CREATE TRIGGER update_coupons_updated_at
+  BEFORE UPDATE ON coupons
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
 -- SCHEMA VERSION
 -- ============================================================
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -502,3 +593,28 @@ CREATE TRIGGER trigger_update_product_reviews_stats
 AFTER INSERT OR UPDATE OR DELETE ON reviews
 FOR EACH ROW
 EXECUTE FUNCTION update_product_reviews_stats();
+
+-- ============================================================
+-- HOMEPAGE SECTIONS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS homepage_sections (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  section_type TEXT NOT NULL,
+  title TEXT,
+  settings JSONB NOT NULL DEFAULT '{}',
+  content_data JSONB NOT NULL DEFAULT '{}',
+  sort_order INTEGER DEFAULT 0,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- WHATSAPP SUBSCRIBERS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS whatsapp_subscribers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT,
+  phone TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

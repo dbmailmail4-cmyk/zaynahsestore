@@ -125,6 +125,51 @@ interface SettingsRow {
   floating_tiktok_enabled?: boolean | null;
   floating_snapchat_enabled?: boolean | null;
   floating_twitter_enabled?: boolean | null;
+  
+  // Customizer & Premium Theme Settings
+  exit_intent_enabled?: boolean | null;
+  exit_intent_title?: string | null;
+  exit_intent_text?: string | null;
+  exit_intent_coupon?: string | null;
+  spin_wheel_enabled?: boolean | null;
+  spin_wheel_segments?: string[] | null;
+  cart_timer_minutes?: number | null;
+  free_shipping_threshold?: number | null;
+  volume_discount_threshold?: number | null;
+  volume_discount_percentage?: number | null;
+  recent_buyers?: any;
+  recently_viewed_limit?: number | null;
+  recent_buyers_enabled?: boolean | null;
+  cookie_consent_enabled?: boolean | null;
+  free_shipping_bar_enabled?: boolean | null;
+  volume_discounts_enabled?: boolean | null;
+  frequently_bought_together_enabled?: boolean | null;
+  stock_urgency_enabled?: boolean | null;
+  flash_sale_enabled?: boolean | null;
+  social_feeds_enabled?: boolean | null;
+  cart_timer_enabled?: boolean | null;
+  size_guide_enabled?: boolean | null;
+  recent_buyers_names?: string | null;
+  recent_buyers_cities?: string | null;
+  recent_buyers_source?: string | null;
+  recent_buyers_product_pool?: string | null;
+  recent_buyers_custom_products?: any;
+  recent_buyers_initial_delay?: number | null;
+  recent_buyers_interval?: number | null;
+  recent_buyers_display_duration?: number | null;
+  exit_intent_image_url?: string | null;
+  exit_intent_delay_mobile?: number | null;
+  cookie_consent_text?: string | null;
+  cookie_consent_button_text?: string | null;
+  social_feeds_homepage_enabled?: boolean | null;
+  social_feeds_product_enabled?: boolean | null;
+  social_feeds_title?: string | null;
+  social_feeds_subtitle?: string | null;
+  social_feeds_desc?: string | null;
+  social_feeds_items?: any;
+  cart_timer_message?: string | null;
+  coupon_codes_enabled?: boolean | null;
+
   updated_at: string;
 }
 
@@ -240,6 +285,52 @@ const mapSettings = (row: SettingsRow): StoreSettings => ({
   floatingTiktokEnabled: row.floating_tiktok_enabled ?? false,
   floatingSnapchatEnabled: row.floating_snapchat_enabled ?? false,
   floatingTwitterEnabled: row.floating_twitter_enabled ?? false,
+  
+  // Customizer & Premium Theme Settings
+  exit_intent_enabled: row.exit_intent_enabled ?? false,
+  exit_intent_title: row.exit_intent_title ?? 'Wait! Get a Special Discount',
+  exit_intent_text: row.exit_intent_text ?? 'Submit your WhatsApp number to unlock a secret coupon code.',
+  exit_intent_coupon: row.exit_intent_coupon ?? 'WELCOME10',
+  spin_wheel_enabled: row.spin_wheel_enabled ?? false,
+  spin_wheel_segments: Array.isArray(row.spin_wheel_segments) ? row.spin_wheel_segments : ['Try Again', '5% Off', 'Free Shipping', '10% Off', 'Free Delivery', 'WELCOME15'],
+  cart_timer_minutes: row.cart_timer_minutes ?? 10,
+  free_shipping_threshold: row.free_shipping_threshold ? parseFloat(row.free_shipping_threshold.toString()) : 2000.00,
+  volume_discount_threshold: row.volume_discount_threshold ?? 3,
+  volume_discount_percentage: row.volume_discount_percentage ? parseFloat(row.volume_discount_percentage.toString()) : 10.00,
+  recent_buyers: typeof row.recent_buyers === 'string' ? JSON.parse(row.recent_buyers) : (row.recent_buyers ?? []),
+  recently_viewed_limit: row.recently_viewed_limit ?? 4,
+  recent_buyers_enabled: row.recent_buyers_enabled ?? true,
+  cookie_consent_enabled: row.cookie_consent_enabled ?? true,
+  free_shipping_bar_enabled: row.free_shipping_bar_enabled ?? true,
+  volume_discounts_enabled: row.volume_discounts_enabled ?? true,
+  frequently_bought_together_enabled: row.frequently_bought_together_enabled ?? true,
+  stock_urgency_enabled: row.stock_urgency_enabled ?? true,
+  flash_sale_enabled: row.flash_sale_enabled ?? true,
+  social_feeds_enabled: row.social_feeds_enabled ?? true,
+  cart_timer_enabled: row.cart_timer_enabled ?? true,
+  size_guide_enabled: row.size_guide_enabled ?? true,
+
+  recent_buyers_names: row.recent_buyers_names ?? 'Ahmad, Fatima, Zainab, Hamza, Ayesha, Bilal, Sana, Ali, Usman, Maryam',
+  recent_buyers_cities: row.recent_buyers_cities ?? 'Lahore, Karachi, Islamabad, Rawalpindi, Faisalabad, Multan, Peshawar, Quetta, Sialkot, Gujranwala',
+  recent_buyers_source: (row.recent_buyers_source as any) ?? 'simulated',
+  recent_buyers_product_pool: (row.recent_buyers_product_pool as any) ?? 'any',
+  recent_buyers_custom_products: typeof row.recent_buyers_custom_products === 'string' ? JSON.parse(row.recent_buyers_custom_products) : (row.recent_buyers_custom_products ?? []),
+  recent_buyers_initial_delay: row.recent_buyers_initial_delay ?? 15,
+  recent_buyers_interval: row.recent_buyers_interval ?? 35,
+  recent_buyers_display_duration: row.recent_buyers_display_duration ?? 6,
+  exit_intent_image_url: row.exit_intent_image_url ?? '',
+  exit_intent_delay_mobile: row.exit_intent_delay_mobile ?? 25,
+  cookie_consent_text: row.cookie_consent_text ?? 'We use cookies to optimize your experience, analyze traffic, and support checkout flows. By continuing, you agree to our privacy policy.',
+  cookie_consent_button_text: row.cookie_consent_button_text ?? 'Accept All',
+  social_feeds_homepage_enabled: row.social_feeds_homepage_enabled ?? true,
+  social_feeds_product_enabled: row.social_feeds_product_enabled ?? true,
+  social_feeds_title: row.social_feeds_title ?? 'Follow Us On Instagram',
+  social_feeds_subtitle: row.social_feeds_subtitle ?? '@Zaynahs.pk',
+  social_feeds_desc: row.social_feeds_desc ?? 'Tag us in your post to get featured on our page',
+  social_feeds_items: typeof row.social_feeds_items === 'string' ? JSON.parse(row.social_feeds_items) : (row.social_feeds_items ?? []),
+  cart_timer_message: row.cart_timer_message ?? 'Items in your cart are reserved for {timer} minutes.',
+  coupon_codes_enabled: row.coupon_codes_enabled ?? true,
+  
   updatedAt: row.updated_at
 });
 
@@ -401,6 +492,50 @@ export const updateSettings = async (settings: Partial<StoreSettings>): Promise<
     if (settings.floatingTiktokEnabled !== undefined) updatePayload.floating_tiktok_enabled = settings.floatingTiktokEnabled;
     if (settings.floatingSnapchatEnabled !== undefined) updatePayload.floating_snapchat_enabled = settings.floatingSnapchatEnabled;
     if (settings.floatingTwitterEnabled !== undefined) updatePayload.floating_twitter_enabled = settings.floatingTwitterEnabled;
+
+    if (settings.exit_intent_enabled !== undefined) updatePayload.exit_intent_enabled = settings.exit_intent_enabled;
+    if (settings.exit_intent_title !== undefined) updatePayload.exit_intent_title = settings.exit_intent_title;
+    if (settings.exit_intent_text !== undefined) updatePayload.exit_intent_text = settings.exit_intent_text;
+    if (settings.exit_intent_coupon !== undefined) updatePayload.exit_intent_coupon = settings.exit_intent_coupon;
+    if (settings.spin_wheel_enabled !== undefined) updatePayload.spin_wheel_enabled = settings.spin_wheel_enabled;
+    if (settings.spin_wheel_segments !== undefined) updatePayload.spin_wheel_segments = settings.spin_wheel_segments;
+    if (settings.cart_timer_minutes !== undefined) updatePayload.cart_timer_minutes = settings.cart_timer_minutes;
+    if (settings.free_shipping_threshold !== undefined) updatePayload.free_shipping_threshold = settings.free_shipping_threshold;
+    if (settings.volume_discount_threshold !== undefined) updatePayload.volume_discount_threshold = settings.volume_discount_threshold;
+    if (settings.volume_discount_percentage !== undefined) updatePayload.volume_discount_percentage = settings.volume_discount_percentage;
+    if (settings.recent_buyers !== undefined) updatePayload.recent_buyers = typeof settings.recent_buyers === 'string' ? JSON.parse(settings.recent_buyers) : settings.recent_buyers;
+    if (settings.recently_viewed_limit !== undefined) updatePayload.recently_viewed_limit = settings.recently_viewed_limit;
+    if (settings.recent_buyers_enabled !== undefined) updatePayload.recent_buyers_enabled = settings.recent_buyers_enabled;
+    if (settings.cookie_consent_enabled !== undefined) updatePayload.cookie_consent_enabled = settings.cookie_consent_enabled;
+    if (settings.free_shipping_bar_enabled !== undefined) updatePayload.free_shipping_bar_enabled = settings.free_shipping_bar_enabled;
+    if (settings.volume_discounts_enabled !== undefined) updatePayload.volume_discounts_enabled = settings.volume_discounts_enabled;
+    if (settings.frequently_bought_together_enabled !== undefined) updatePayload.frequently_bought_together_enabled = settings.frequently_bought_together_enabled;
+    if (settings.stock_urgency_enabled !== undefined) updatePayload.stock_urgency_enabled = settings.stock_urgency_enabled;
+    if (settings.flash_sale_enabled !== undefined) updatePayload.flash_sale_enabled = settings.flash_sale_enabled;
+    if (settings.social_feeds_enabled !== undefined) updatePayload.social_feeds_enabled = settings.social_feeds_enabled;
+    if (settings.cart_timer_enabled !== undefined) updatePayload.cart_timer_enabled = settings.cart_timer_enabled;
+    if (settings.size_guide_enabled !== undefined) updatePayload.size_guide_enabled = settings.size_guide_enabled;
+
+    if (settings.recent_buyers_names !== undefined) updatePayload.recent_buyers_names = settings.recent_buyers_names;
+    if (settings.recent_buyers_cities !== undefined) updatePayload.recent_buyers_cities = settings.recent_buyers_cities;
+    if (settings.recent_buyers_source !== undefined) updatePayload.recent_buyers_source = settings.recent_buyers_source;
+    if (settings.recent_buyers_product_pool !== undefined) updatePayload.recent_buyers_product_pool = settings.recent_buyers_product_pool;
+    if (settings.recent_buyers_custom_products !== undefined) updatePayload.recent_buyers_custom_products = typeof settings.recent_buyers_custom_products === 'string' ? JSON.parse(settings.recent_buyers_custom_products) : settings.recent_buyers_custom_products;
+    if (settings.recent_buyers_initial_delay !== undefined) updatePayload.recent_buyers_initial_delay = settings.recent_buyers_initial_delay;
+    if (settings.recent_buyers_interval !== undefined) updatePayload.recent_buyers_interval = settings.recent_buyers_interval;
+    if (settings.recent_buyers_display_duration !== undefined) updatePayload.recent_buyers_display_duration = settings.recent_buyers_display_duration;
+    if (settings.exit_intent_image_url !== undefined) updatePayload.exit_intent_image_url = settings.exit_intent_image_url;
+    if (settings.exit_intent_delay_mobile !== undefined) updatePayload.exit_intent_delay_mobile = settings.exit_intent_delay_mobile;
+    if (settings.cookie_consent_text !== undefined) updatePayload.cookie_consent_text = settings.cookie_consent_text;
+    if (settings.cookie_consent_button_text !== undefined) updatePayload.cookie_consent_button_text = settings.cookie_consent_button_text;
+    if (settings.social_feeds_homepage_enabled !== undefined) updatePayload.social_feeds_homepage_enabled = settings.social_feeds_homepage_enabled;
+    if (settings.social_feeds_product_enabled !== undefined) updatePayload.social_feeds_product_enabled = settings.social_feeds_product_enabled;
+    if (settings.social_feeds_title !== undefined) updatePayload.social_feeds_title = settings.social_feeds_title;
+    if (settings.social_feeds_subtitle !== undefined) updatePayload.social_feeds_subtitle = settings.social_feeds_subtitle;
+    if (settings.social_feeds_desc !== undefined) updatePayload.social_feeds_desc = settings.social_feeds_desc;
+    if (settings.social_feeds_items !== undefined) updatePayload.social_feeds_items = typeof settings.social_feeds_items === 'string' ? JSON.parse(settings.social_feeds_items) : settings.social_feeds_items;
+    if (settings.cart_timer_message !== undefined) updatePayload.cart_timer_message = settings.cart_timer_message;
+    if (settings.coupon_codes_enabled !== undefined) updatePayload.coupon_codes_enabled = settings.coupon_codes_enabled;
 
     const { data, error } = await supabase
       .from('store_settings')

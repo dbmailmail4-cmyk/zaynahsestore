@@ -4,10 +4,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Trash2, Plus, Upload, Star, Bold, Italic, Underline, List, ListOrdered, Code, Eye, X, FolderOpen, Search, Check, Image as ImageIcon, ChevronDown } from 'lucide-react';
-import { Product, ProductImage, ProductVariant, ProductModifier, Category, VariantPreset, VariantPresetValue, Badge } from '@/lib/types';
+import { Product, ProductImage, ProductVariant, ProductModifier, Category, VariantPreset, VariantPresetValue, Badge, SizeGuide } from '@/lib/types';
 import { createProduct, updateProduct } from '@/lib/services/products';
 import { uploadProductImage, deleteProductImage } from '@/lib/services/storage';
 import { getVariantPresets } from '@/lib/services/variantPresets';
+import { getSizeGuides } from '@/lib/services/sizeGuides';
 import { getBadges } from '@/lib/services/badges';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -66,17 +67,31 @@ export default function ProductForm({ categories, initialProduct }: ProductFormP
   const [allBadges, setAllBadges] = useState<Badge[]>([]);
   const [customBadgeId, setCustomBadgeId] = useState(initialProduct?.customBadgeId || '');
   const [badgeEnabled, setBadgeEnabled] = useState(initialProduct?.badgeEnabled ?? true);
+  const [sizeGuideId, setSizeGuideId] = useState(initialProduct?.sizeGuideId || '');
+  const [sizeGuidesList, setSizeGuidesList] = useState<SizeGuide[]>([]);
+
+  const [flashSaleEnabled, setFlashSaleEnabled] = useState(initialProduct?.flashSaleEnabled ?? false);
+  const [flashSaleEndDate, setFlashSaleEndDate] = useState(initialProduct?.flashSaleEndDate ? new Date(initialProduct.flashSaleEndDate).toISOString().slice(0, 16) : '');
+  const [frequentlyBoughtTogetherIds, setFrequentlyBoughtTogetherIds] = useState<string[]>(initialProduct?.frequentlyBoughtTogetherIds || []);
+  const [productList, setProductList] = useState<Product[]>([]);
 
   useEffect(() => {
-    async function loadBadges() {
+    async function loadBadgesAndSizeGuides() {
       try {
-        const b = await getBadges();
+        const supabaseClient = createClient();
+        const [b, sg, prods] = await Promise.all([
+          getBadges(),
+          getSizeGuides(),
+          supabaseClient.from('products').select('id, name, price').eq('active', true)
+        ]);
         setAllBadges(b);
+        setSizeGuidesList(sg);
+        setProductList((prods.data || []).filter((p: any) => p.id !== initialProduct?.id) as any);
       } catch (err) {
-        console.error('Failed to load badges:', err);
+        console.error('Failed to load badges, size guides or products:', err);
       }
     }
-    loadBadges();
+    loadBadgesAndSizeGuides();
   }, []);
 
   // Rich Text Editor States and Helpers
@@ -505,6 +520,10 @@ export default function ProductForm({ categories, initialProduct }: ProductFormP
         showSwatchesOnArchive,
         customBadgeId: customBadgeId || undefined,
         badgeEnabled: badgeEnabled,
+        sizeGuideId: sizeGuideId || undefined,
+        frequentlyBoughtTogetherIds: frequentlyBoughtTogetherIds,
+        flashSaleEnabled: flashSaleEnabled,
+        flashSaleEndDate: flashSaleEndDate ? new Date(flashSaleEndDate).toISOString() : undefined,
         tags: parsedTags,
         description: description.trim() || undefined,
         shortDescription: shortDescription.trim() || undefined,
@@ -593,6 +612,20 @@ export default function ProductForm({ categories, initialProduct }: ProductFormP
                   <option value="">No Category</option>
                   {categories.map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">Size Guide Preset</label>
+                <select
+                  value={sizeGuideId}
+                  onChange={(e) => setSizeGuideId(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm font-medium focus:border-[#1a1a2e] focus:bg-white focus:outline-none transition-all"
+                >
+                  <option value="">No Size Guide</option>
+                  {sizeGuidesList.map(sg => (
+                    <option key={sg.id} value={sg.id}>{sg.name}</option>
                   ))}
                 </select>
               </div>
@@ -1394,6 +1427,78 @@ export default function ProductForm({ categories, initialProduct }: ProductFormP
                 />
                 <span className="text-sm font-semibold text-gray-700">Service (No stock tracking)</span>
               </label>
+            </div>
+          </div>
+
+          {/* Flash Sale Options Card */}
+          <div className="bg-white dark:bg-[#16162a] p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-4 text-gray-900 dark:text-white transition-colors">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">Flash Sale Settings</h3>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={flashSaleEnabled}
+                  onChange={(e) => setFlashSaleEnabled(e.target.checked)}
+                  className="rounded border-gray-300 text-[#e94560] focus:ring-[#e94560] h-4 w-4"
+                />
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Enable Flash Sale for Product</span>
+              </label>
+
+              {flashSaleEnabled && (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Countdown End Time</label>
+                  <input
+                    type="datetime-local"
+                    value={flashSaleEndDate}
+                    onChange={(e) => setFlashSaleEndDate(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-[#0f0f1b]/50 px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white focus:border-[#1a1a2e] dark:focus:border-[#e94560] focus:bg-white dark:focus:bg-[#16162a] focus:outline-none transition-all"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Frequently Bought Together (FBT) Card */}
+          <div className="bg-white dark:bg-[#16162a] p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-4 text-gray-900 dark:text-white transition-colors">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">Bought Together Recommendations</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Select up to 2 items to bundle and offer discounts at storefront.</p>
+            
+            <div className="border border-gray-200 dark:border-gray-800 rounded-xl max-h-60 overflow-y-auto p-3 space-y-2 bg-gray-50 dark:bg-[#0f0f1b] overscroll-contain">
+              {productList.length === 0 ? (
+                <span className="text-xs text-gray-500">No other active products available.</span>
+              ) : (
+                productList.map((product) => {
+                  const isChecked = frequentlyBoughtTogetherIds.includes(product.id);
+                  return (
+                    <label
+                      key={product.id}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 cursor-pointer select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={!isChecked && frequentlyBoughtTogetherIds.length >= 2}
+                        onChange={() => {
+                          if (isChecked) {
+                            setFrequentlyBoughtTogetherIds(prev => prev.filter(id => id !== product.id));
+                          } else {
+                            if (frequentlyBoughtTogetherIds.length < 2) {
+                              setFrequentlyBoughtTogetherIds(prev => [...prev, product.id]);
+                            } else {
+                              toast.warning('You can choose a maximum of 2 bought-together items.');
+                            }
+                          }
+                        }}
+                        className="rounded border-gray-300 text-[#e94560] focus:ring-[#e94560] h-4 w-4"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-850 dark:text-gray-200 truncate">{product.name}</p>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500">Rs. {product.price}</p>
+                      </div>
+                    </label>
+                  );
+                })
+              )}
             </div>
           </div>
 

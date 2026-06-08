@@ -1,0 +1,171 @@
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import { HomepageSection, WhatsAppSubscriber } from '@/lib/types';
+import { revalidatePath } from 'next/cache';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+const staticSupabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+
+export const getHomepageSections = async (onlyActive = false): Promise<HomepageSection[]> => {
+  try {
+    let query = staticSupabase
+      .from('homepage_sections')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    
+    if (onlyActive) {
+      query = query.eq('active', true);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('[sections] getHomepageSections failed:', error);
+    throw error;
+  }
+};
+
+export const updateHomepageSection = async (
+  id: string,
+  updates: Partial<HomepageSection>
+): Promise<HomepageSection> => {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('homepage_sections')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    revalidatePath('/');
+    return data;
+  } catch (error) {
+    console.error('[sections] updateHomepageSection failed:', error);
+    throw error;
+  }
+};
+
+export const reorderHomepageSections = async (
+  sections: { id: string; sort_order: number }[]
+): Promise<void> => {
+  try {
+    const supabase = await createClient();
+    // Perform updates in parallel
+    const promises = sections.map((sec) =>
+      supabase
+        .from('homepage_sections')
+        .update({ sort_order: sec.sort_order })
+        .eq('id', sec.id)
+    );
+    await Promise.all(promises);
+    revalidatePath('/');
+  } catch (error) {
+    console.error('[sections] reorderHomepageSections failed:', error);
+    throw error;
+  }
+};
+
+export const addHomepageSection = async (
+  sectionType: string,
+  title: string
+): Promise<HomepageSection> => {
+  try {
+    const supabase = await createClient();
+    // Get highest sort_order
+    const { data: maxSec, error: maxError } = await supabase
+      .from('homepage_sections')
+      .select('sort_order')
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const newSortOrder = (maxSec?.sort_order ?? 0) + 1;
+
+    // Set default settings/content based on type
+    let settings: Record<string, any> = {};
+    let content_data: Record<string, any> = {};
+
+    if (sectionType === 'product_grid') {
+      settings = { limit: 8, columns_desktop: 4, columns_mobile: 2, source: 'all' };
+    } else if (sectionType === 'category_list') {
+      settings = { columns_desktop: 6, columns_mobile: 3 };
+    } else if (sectionType === 'hero_banner') {
+      settings = { height_desktop: '450px', height_mobile: '220px', overlay_opacity: 0.3 };
+    } else if (sectionType === 'recent_reviews') {
+      settings = { limit: 3 };
+    }
+
+    const { data, error } = await supabase
+      .from('homepage_sections')
+      .insert({
+        section_type: sectionType,
+        title,
+        settings,
+        content_data,
+        sort_order: newSortOrder,
+        active: true
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    revalidatePath('/');
+    return data;
+  } catch (error) {
+    console.error('[sections] addHomepageSection failed:', error);
+    throw error;
+  }
+};
+
+export const deleteHomepageSection = async (id: string): Promise<void> => {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('homepage_sections')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    revalidatePath('/');
+  } catch (error) {
+    console.error('[sections] deleteHomepageSection failed:', error);
+    throw error;
+  }
+};
+
+export const addWhatsAppSubscriber = async (
+  phone: string,
+  name?: string
+): Promise<WhatsAppSubscriber> => {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('whatsapp_subscribers')
+      .insert({ phone, name })
+      .select('*')
+      .single();
+
+    if (error) {
+      // If already subscribed, return it
+      if (error.code === '23505') { // unique_violation
+        const { data: existing } = await supabase
+          .from('whatsapp_subscribers')
+          .select('*')
+          .eq('phone', phone)
+          .single();
+        if (existing) return existing;
+      }
+      throw error;
+    }
+    return data;
+  } catch (error) {
+    console.error('[sections] addWhatsAppSubscriber failed:', error);
+    throw error;
+  }
+};

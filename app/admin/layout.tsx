@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ShoppingBag, FolderOpen, ClipboardList, Settings, LogOut, Store, Star, Layers, Images, Award, Users } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, FolderOpen, ClipboardList, Settings, LogOut, Store, Star, Layers, Images, Award, Users, Layout } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import ThemeToggle from '@/components/common/ThemeToggle';
@@ -40,6 +40,7 @@ export default function AdminLayout({
     { label: 'Reviews', href: '/admin/reviews', icon: Star },
     { label: 'Badges', href: '/admin/badges', icon: Award },
     { label: 'Settings', href: '/admin/settings', icon: Settings },
+    { label: 'Homepage Customizer', href: '/admin/settings/customizer', icon: Layout },
   ];
 
   // If we are on the login page, don't show the dashboard layout

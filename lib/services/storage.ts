@@ -68,7 +68,7 @@ export const uploadProductImage = async (
 
 export const uploadSettingsImage = async (
   file: File,
-  type: 'logo' | 'favicon' | 'banner'
+  type: 'logo' | 'favicon' | 'banner' | 'exit_intent' | 'size_chart'
 ): Promise<string> => {
   try {
     // Primary: server-side Sharp conversion
